@@ -1,5 +1,8 @@
 #pragma once
 
+// lucida
+#include "config/lucida_config.h"
+
 // lib
 #include <fmt/core.h>
 #include <vulkan/vulkan.h>
@@ -19,10 +22,11 @@
 		}																									\
 	} while (0)
 
+class Window;
+
 class Renderer {
 public:
-
-	Renderer();
+	Renderer(Window& window, LucidaConfig& lc);
 
 	~Renderer();
 
@@ -30,8 +34,9 @@ public:
 	void destroy_renderer();
 
 private:
-	
+	Window& m_rWindow;
 	VkInstance m_instance = VK_NULL_HANDLE;
 	VkPhysicalDevice m_physical_device = VK_NULL_HANDLE;
 	VkDevice m_device = VK_NULL_HANDLE;
+	VkSurfaceKHR m_surface = VK_NULL_HANDLE;
 };

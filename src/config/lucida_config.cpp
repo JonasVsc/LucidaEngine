@@ -1,5 +1,6 @@
 #include "lucida_config.h"
 
+// lucida
 #include "debug/log.h"
 
 // std
@@ -25,9 +26,23 @@ void LucidaConfig::default_config()
 {
 	m_config = json::parse( R"(
 	  {
-		"renderer": {
-			"validation_layers": true
+		"lucida": {
+			"version": [0,0,1]
 		},
+
+		"app": {
+			"name": "Lucida Application",
+			"version": [0,0,1]
+		},
+
+		"renderer": {
+			"vulkan": {
+				"version": [1,0,0],
+				"layers": [],
+				"extensions": []
+			}
+		},
+
 		"window": {
 			"title": "Lucida Application",
 			"width": 640,

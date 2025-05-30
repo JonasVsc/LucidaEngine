@@ -7,7 +7,7 @@ if (POLICY CMP0141)
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
-set(VULKAN_SDK "C:\\VulkanSDK\\1.4.313.0\\")
+set(VULKAN_SDK "C:\\VulkanSDK\\1.4.313.0")
 
 project ("Lucida")
 
@@ -39,6 +39,7 @@ add_executable (Lucida
 	${DEBUG_SOURCES}
 	${CONFIG_SOURCES}
 	${WINDOW_SOURCES}
+	${RENDERER_SOURCES}
 )
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)

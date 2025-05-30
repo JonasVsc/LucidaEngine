@@ -1,11 +1,11 @@
 ﻿#include "lucida.h"
 
-
 int main(int argc, char** argv)
 {
 	LucidaConfig config("lucida.json");
 	
 	Window window{ config };
+	Renderer renderer{ window, config };
 
 	try {
 		while (!window.closed())

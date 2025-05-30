@@ -1,34 +1,162 @@
 #include "renderer.h"
 
-// lib
+// lucida
 #include "debug/log.h"
+#include "window/window.h"
+
+// std
+#include <unordered_set>
 
 #ifdef DEBUG
 
 static void print_physical_device_properties(VkPhysicalDeviceProperties* pPhysicalDeviceProperties)
 {
-	fmt::println("{}:", pPhysicalDeviceProperties->deviceName);
-	fmt::println("\t- maxPushConstantSize: {}", pPhysicalDeviceProperties->limits.maxPushConstantsSize);
-	fmt::println("\t- memoryMapAlignment: {}", pPhysicalDeviceProperties->limits.minMemoryMapAlignment);
+	jdebug("Selected Physical Device");
+	fmt::println("{}", pPhysicalDeviceProperties->deviceName);
+	fmt::println(" - maxPushConstantSize: {}", pPhysicalDeviceProperties->limits.maxPushConstantsSize);
+	fmt::println(" - memoryMapAlignment: {}", pPhysicalDeviceProperties->limits.minMemoryMapAlignment);
 }
 
 #endif // DEBUG
 
-Renderer::Renderer()
+Renderer::Renderer(Window& window, LucidaConfig& lc)
+	: m_rWindow{window}
 {
-
 	jinfo("renderer constructor");
-	
+
+	// Convert lc layers to c style
+	std::vector<std::string> layers = lc.get_layers();
+	std::vector<const char*> cLayers;
+	for (const auto& layer : layers)
+	{
+		cLayers.push_back(layer.c_str());
+	}
+
+	// Convert lc extensions to c style
+	std::vector<std::string> extensions = lc.get_extensions();
+	std::vector<const char*> cExtensions;
+	for (const auto& ext : extensions)
+	{
+		cExtensions.push_back(ext.c_str()); 
+	}
+
 	// VkInstance
-	{ 
+	{
+		// Available Layers
+		uint32_t count_layers;
+		vkEnumerateInstanceLayerProperties(&count_layers, nullptr);
+		std::vector<VkLayerProperties> available_layers(count_layers);
+		vkEnumerateInstanceLayerProperties(&count_layers, available_layers.data());
+
+		// Requested Layers
+		std::vector<const char*> unsupported_layers;
+		std::vector<const char*> supported_layers;
+		for (const auto& lay : cLayers)
+		{
+			bool unsupported = true;
+			for (const auto& available_lay : available_layers)
+			{
+				if (!strcmp(available_lay.layerName, lay))
+				{
+					supported_layers.push_back(lay);
+					unsupported = false;
+				}
+			}
+
+			if (unsupported)
+			{
+				unsupported_layers.push_back(lay);
+			}
+		}
+
+		if (!unsupported_layers.empty())
+		{
+			jerr("layers unsupported:");
+			for (const auto& lay : unsupported_layers)
+			{
+				fmt::println("- {}", lay);
+			}
+			throw std::runtime_error("instance doesn't support requested layers");
+		}
+
+		// Available Extensions
+		uint32_t count_extensions;
+		vkEnumerateInstanceExtensionProperties(nullptr, &count_extensions, nullptr);
+		std::vector<VkExtensionProperties> available_extensions(count_extensions);
+		vkEnumerateInstanceExtensionProperties(nullptr, &count_extensions, available_extensions.data());
+
+		// Required SDL Extensions
+		uint32_t count_sdl_extensions;
+		SDL_Vulkan_GetInstanceExtensions(m_rWindow.w_sdl(), &count_sdl_extensions, nullptr);
+		std::vector<const char*> sdl_extensions(count_sdl_extensions);
+		SDL_Vulkan_GetInstanceExtensions(m_rWindow.w_sdl(), &count_sdl_extensions, sdl_extensions.data());
+		//jdebug("Required SDL extensions:");
+		//for (auto& ext : sdl_extensions)
+		//{
+		//	fmt::println("- {}", ext);
+		//}
+
+		// Requested/Required Extensions
+		std::vector<const char*> required_extensions;
+		required_extensions.insert(required_extensions.end(), sdl_extensions.begin(), sdl_extensions.end());
+		required_extensions.insert(required_extensions.end(), cExtensions.begin(), cExtensions.end());
+
+		// Check if Instance supports Requested/Required extensions
+		std::unordered_set<const char*> extensions_set;
+		extensions_set.insert(required_extensions.begin(), required_extensions.end());
+		std::vector<const char*> unsupported_extensions;
+		std::vector<const char*> supported_extensions;
+		for (const auto& ext : extensions_set)
+		{
+			bool unsupported = true;
+			for (const auto& available_ext : available_extensions)
+			{
+				if (!strcmp(available_ext.extensionName, ext))
+				{
+					supported_extensions.push_back(ext);
+					unsupported = false;
+				}
+			}
+
+			if (unsupported)
+			{
+				unsupported_extensions.push_back(ext);
+			}
+		}
+
+		if (!unsupported_extensions.empty())
+		{
+			jwarn("Trying to initialize renderer without unsupported extensions:");
+			for (const auto& ext : unsupported_extensions)
+			{
+				fmt::println("- {}", ext);
+			}
+		}
+
+#ifdef DEBUG
+		jdebug("Using layers:");
+		for (auto& lay : cLayers)
+			fmt::println("- {}", lay);
+		jdebug("Using extensions:");
+		for (const auto& ext : required_extensions)
+			fmt::println("- {}", ext);
+#endif
+
+		uint32_t appVersion = VK_MAKE_API_VERSION(
+			0 /* VARIANT */, lc.get_app_version()[0] /* MAJOR */, lc.get_app_version()[1] /* MINOR */, lc.get_app_version()[2] /* PATCH */);
+		uint32_t apiVersion = VK_MAKE_API_VERSION(
+			0 /* VARIANT */, lc.get_api_version()[0] /* MAJOR */, lc.get_api_version()[1] /* MINOR */, lc.get_api_version()[2] /* PATCH */);
+		uint32_t engineVersion = VK_MAKE_API_VERSION(
+			0 /* VARIANT */, lc.get_lucida_version()[0] /* MAJOR */, lc.get_lucida_version()[1] /* MINOR */, lc.get_lucida_version()[2] /* PATCH */);
+
 		VkApplicationInfo app_info = {
 			.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
 			.pNext = nullptr,
-			.pApplicationName = nullptr,
-			.applicationVersion = 0,
-			.pEngineName = nullptr,
-			.engineVersion = 0,
-			.apiVersion = 0
+			.pApplicationName = lc.get_app_name().c_str(),
+			.applicationVersion = appVersion,
+			.pEngineName = "Lucida",
+			.engineVersion = engineVersion,
+			.apiVersion = apiVersion
 		};
 
 		VkInstanceCreateInfo instance_create_info = {
@@ -36,13 +164,18 @@ Renderer::Renderer()
 			.pNext = nullptr,
 			.flags = 0,
 			.pApplicationInfo = &app_info,
-			.enabledLayerCount = 0,
-			.ppEnabledLayerNames = nullptr,
-			.enabledExtensionCount = 0,
-			.ppEnabledExtensionNames = nullptr
+			.enabledLayerCount = static_cast<uint32_t>(cLayers.size()),
+			.ppEnabledLayerNames = cLayers.data(),
+			.enabledExtensionCount = static_cast<uint32_t>(supported_extensions.size()),
+			.ppEnabledExtensionNames = supported_extensions.data()
 		};
 
 		VK_CHECK(vkCreateInstance(&instance_create_info, nullptr, &m_instance));
+	}
+
+	//VkSurfaceKHR
+	{
+		SDL_Vulkan_CreateSurface(m_rWindow.w_sdl(), m_instance, &m_surface);
 	}
 
 	// VkPhysicalDevice
@@ -53,18 +186,16 @@ Renderer::Renderer()
 		std::vector<VkPhysicalDevice> physical_devices(count_physical_devices);
 		vkEnumeratePhysicalDevices(m_instance, &count_physical_devices, physical_devices.data());
 
-
-#ifdef DEBUG
-		for (auto phys : physical_devices)
+		for (const auto& phys : physical_devices)
 		{
-			VkPhysicalDeviceProperties prop;
-			vkGetPhysicalDeviceProperties(phys, &prop);
-			print_physical_device_properties(&prop);
-		}
-#endif // DEBUG
+			// PROPERTIES
+			VkPhysicalDeviceProperties props;
+			vkGetPhysicalDeviceProperties(phys, &props);
 
-		// TODO: Algorithm: Select best physical device
-		m_physical_device = physical_devices[0];
+			// FEATURES
+			VkPhysicalDeviceFeatures feats;
+			vkGetPhysicalDeviceFeatures(phys, &feats);
+		}
 	}
 
 	// Device
