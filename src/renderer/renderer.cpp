@@ -79,7 +79,28 @@ bool Renderer::is_physical_device_suitable(VkPhysicalDevice physical_device)
 		jinfo("SHARING_MODE: EXCLUSIVE");
 	else
 		jinfo("SHARING_MODE: CONCURRENT");
-	return indices.is_complete();
+
+	bool extensions_supported = check_device_extension_support(physical_device);
+
+	return indices.is_complete() && extensions_supported;
+}
+
+bool Renderer::check_device_extension_support(VkPhysicalDevice device)
+{
+	uint32_t count_extensions;
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &count_extensions, nullptr);
+
+	std::vector<VkExtensionProperties> available_extensions(count_extensions);
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &count_extensions, available_extensions.data());
+
+	std::set<std::string> required_extensions(device_extensions.begin(), device_extensions.end());
+
+	for (const auto& ext : available_extensions)
+	{
+		required_extensions.erase(ext.extensionName);
+	}
+
+	return required_extensions.empty();
 }
 
 Renderer::Renderer(Window& window, LucidaConfig& lc)
@@ -306,8 +327,8 @@ void Renderer::create_device()
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 		.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size()),
 		.pQueueCreateInfos = queue_create_infos.data(),
-		.enabledExtensionCount = 0,
-		.ppEnabledExtensionNames = nullptr,
+		.enabledExtensionCount = static_cast<uint32_t>(device_extensions.size()),
+		.ppEnabledExtensionNames = device_extensions.data(),
 		.pEnabledFeatures = &device_features
 	};
 

@@ -53,6 +53,11 @@ struct VulkanContext {
 class Window;
 
 class Renderer {
+
+	const std::vector<const char*> device_extensions = {
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME
+	};
+
 public:
 	Renderer(Window& window, LucidaConfig& lc);
 
@@ -66,6 +71,7 @@ private:
 
 	QueueFamilyIndices find_queue_families(VkPhysicalDevice physical_device);
 	bool is_physical_device_suitable(VkPhysicalDevice physical_device);
+	bool check_device_extension_support(VkPhysicalDevice device);
 
 
 	Window& m_window;
