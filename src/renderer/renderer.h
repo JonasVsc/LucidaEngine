@@ -7,6 +7,7 @@
 #include <fmt/core.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
+#include <vma/vk_mem_alloc.h>
 
 // std
 #include <vector>
@@ -38,16 +39,32 @@ struct QueueFamilyIndices {
 	}
 };
 
+struct SwapchainSupportDetails {
+	VkSurfaceCapabilitiesKHR capabilities;
+	std::vector<VkSurfaceFormatKHR> formats;
+	std::vector<VkPresentModeKHR> present_modes;
+};
+
 struct VulkanContext {
 	VkInstance instance = VK_NULL_HANDLE;
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
 	VkPhysicalDevice physical_device = VK_NULL_HANDLE;
 	VkDevice device = VK_NULL_HANDLE;
+	VmaAllocator allocator = VK_NULL_HANDLE;
 	VkQueue graphics_queue = VK_NULL_HANDLE;
 	VkQueue present_queue = VK_NULL_HANDLE;
 
 	// Utility
 	VkPhysicalDeviceProperties physical_device_properties;
+};
+
+struct VulkanSwapchain {
+	VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+	std::vector<VkImage> images;
+	std::vector<VkImageView> image_views;
+	std::vector<VmaAllocation> image_view_allocations;
+	VkFormat image_format;
+	VkExtent2D extent;
 };
 
 class Window;
@@ -68,13 +85,20 @@ private:
 	void create_instance();
 	void select_physical_device();
 	void create_device();
+	void create_allocator();
+	void create_swapchain();
 
 	QueueFamilyIndices find_queue_families(VkPhysicalDevice physical_device);
 	bool is_physical_device_suitable(VkPhysicalDevice physical_device);
 	bool check_device_extension_support(VkPhysicalDevice device);
 
+	SwapchainSupportDetails query_swapchain_support_details(VkPhysicalDevice physical_device);
+	VkSurfaceFormatKHR choose_swapchain_surface_format(const std::vector<VkSurfaceFormatKHR>& available_formats);
+	VkPresentModeKHR choose_swapchain_present_mode(const std::vector<VkPresentModeKHR>& available_present_modes);
+	VkExtent2D choose_swapchain_extent(const VkSurfaceCapabilitiesKHR& capabilites);
 
 	Window& m_window;
 	LucidaConfig& m_config;
 	VulkanContext m_context;
+	VulkanSwapchain m_swapchain;
 };
