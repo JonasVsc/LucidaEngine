@@ -22,6 +22,12 @@
 		}																									\
 	} while (0)
 
+struct VulkanContext {
+	VkInstance instance = VK_NULL_HANDLE;
+	VkSurfaceKHR surface = VK_NULL_HANDLE;
+	VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+};
+
 class Window;
 
 class Renderer {
@@ -30,13 +36,12 @@ public:
 
 	~Renderer();
 
-	// Destroy Renderer
-	void destroy_renderer();
-
 private:
-	Window& m_rWindow;
-	VkInstance m_instance = VK_NULL_HANDLE;
-	VkPhysicalDevice m_physical_device = VK_NULL_HANDLE;
-	VkDevice m_device = VK_NULL_HANDLE;
-	VkSurfaceKHR m_surface = VK_NULL_HANDLE;
+
+	void create_instance();
+	void select_physical_device();
+
+	Window& m_window;
+	LucidaConfig& m_config;
+	VulkanContext m_context;
 };
