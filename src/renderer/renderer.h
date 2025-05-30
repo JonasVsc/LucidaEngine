@@ -24,11 +24,17 @@
 	} while (0)
 
 struct QueueFamilyIndices {
-	std::optional<uint32_t> gaphics_family;
+	std::optional<uint32_t> graphics_family;
+	std::optional<uint32_t> present_family;
 
 	bool is_complete()
 	{
-		return gaphics_family.has_value();
+		return graphics_family.has_value() && present_family.has_value();
+	}
+
+	bool is_exclusive()
+	{
+		return graphics_family.value() == present_family.value();
 	}
 };
 
@@ -36,7 +42,9 @@ struct VulkanContext {
 	VkInstance instance = VK_NULL_HANDLE;
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
 	VkPhysicalDevice physical_device = VK_NULL_HANDLE;
-
+	VkDevice device = VK_NULL_HANDLE;
+	VkQueue graphics_queue = VK_NULL_HANDLE;
+	VkQueue present_queue = VK_NULL_HANDLE;
 
 	// Utility
 	VkPhysicalDeviceProperties physical_device_properties;
@@ -54,6 +62,11 @@ private:
 
 	void create_instance();
 	void select_physical_device();
+	void create_device();
+
+	QueueFamilyIndices find_queue_families(VkPhysicalDevice physical_device);
+	bool is_physical_device_suitable(VkPhysicalDevice physical_device);
+
 
 	Window& m_window;
 	LucidaConfig& m_config;

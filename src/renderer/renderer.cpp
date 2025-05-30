@@ -7,6 +7,7 @@
 // std
 #include <unordered_set>
 #include <map>
+#include <set>
 
 #ifdef DEBUG
 
@@ -36,7 +37,7 @@ static int rate_physical_device_suitability(VkPhysicalDevice physical_device)
 	return score;
 }
 
-static QueueFamilyIndices find_queue_families(VkPhysicalDevice physical_device)
+QueueFamilyIndices Renderer::find_queue_families(VkPhysicalDevice physical_device)
 {
 	QueueFamilyIndices indices;
 
@@ -48,9 +49,17 @@ static QueueFamilyIndices find_queue_families(VkPhysicalDevice physical_device)
 	int i = 0;
 	for (const auto& queue_family : queue_families)
 	{
+		uint32_t support_present = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, m_context.surface, &support_present);
+		
+		if (support_present)
+		{
+			indices.present_family = i;
+		}
+
 		if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT)
 		{
-			indices.gaphics_family = i;
+			indices.graphics_family = i;
 		}
 
 		if (indices.is_complete())
@@ -60,13 +69,16 @@ static QueueFamilyIndices find_queue_families(VkPhysicalDevice physical_device)
 
 		i++;
 	}
-
 	return indices;
 }
 
-static bool is_physical_device_suitable(VkPhysicalDevice physical_device)
+bool Renderer::is_physical_device_suitable(VkPhysicalDevice physical_device)
 {
 	QueueFamilyIndices indices = find_queue_families(physical_device);
+	if (indices.is_exclusive())
+		jinfo("SHARING_MODE: EXCLUSIVE");
+	else
+		jinfo("SHARING_MODE: CONCURRENT");
 	return indices.is_complete();
 }
 
@@ -78,11 +90,13 @@ Renderer::Renderer(Window& window, LucidaConfig& lc)
 	create_instance();
 	SDL_Vulkan_CreateSurface(m_window.w_sdl(), m_context.instance, &m_context.surface);
 	select_physical_device();
+	create_device();
 }
 
 Renderer::~Renderer()
 {
 	jinfo("renderer destructor");
+	vkDestroyDevice(m_context.device, nullptr);
 	vkDestroySurfaceKHR(m_context.instance, m_context.surface, nullptr);
 	vkDestroyInstance(m_context.instance, nullptr);
 }
@@ -264,4 +278,41 @@ void Renderer::select_physical_device()
 	{
 		throw std::runtime_error("failed to find a suitable GPU");
 	}
+}
+
+void Renderer::create_device()
+{
+	QueueFamilyIndices indices = find_queue_families(m_context.physical_device);
+	
+	std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
+
+	std::set<uint32_t> unique_queue_families = { indices.graphics_family.value(), indices.present_family.value() };
+
+	float queue_priority = 1.0f;
+	for (uint32_t queue_family : unique_queue_families)
+	{
+		VkDeviceQueueCreateInfo queue_create_info = {
+			.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+			.queueFamilyIndex = queue_family,
+			.queueCount = 1,
+			.pQueuePriorities = &queue_priority
+		};
+		queue_create_infos.push_back(queue_create_info);
+	}
+
+	VkPhysicalDeviceFeatures device_features{};
+
+	VkDeviceCreateInfo device_create_info = {
+		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+		.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size()),
+		.pQueueCreateInfos = queue_create_infos.data(),
+		.enabledExtensionCount = 0,
+		.ppEnabledExtensionNames = nullptr,
+		.pEnabledFeatures = &device_features
+	};
+
+	VK_CHECK(vkCreateDevice(m_context.physical_device, &device_create_info, nullptr, &m_context.device));
+
+	vkGetDeviceQueue(m_context.device, indices.graphics_family.value(), 0, &m_context.graphics_queue);
+	vkGetDeviceQueue(m_context.device, indices.present_family.value(), 0, &m_context.present_queue);
 }
