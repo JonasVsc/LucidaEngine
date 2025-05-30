@@ -6,6 +6,7 @@
 
 // std
 #include <unordered_set>
+#include <map>
 
 #ifdef DEBUG
 
@@ -18,6 +19,56 @@ static void print_physical_device_properties(VkPhysicalDeviceProperties* pPhysic
 }
 
 #endif // DEBUG
+
+static int rate_physical_device_suitability(VkPhysicalDevice physical_device)
+{
+	VkPhysicalDeviceProperties properties;
+	vkGetPhysicalDeviceProperties(physical_device, &properties);
+	int score{};
+
+	if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+	{
+		score += 1000;
+	}
+
+	score += properties.limits.maxImageDimension2D;
+
+	return score;
+}
+
+static QueueFamilyIndices find_queue_families(VkPhysicalDevice physical_device)
+{
+	QueueFamilyIndices indices;
+
+	uint32_t count_queue_family;
+	vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count_queue_family, nullptr);
+	std::vector<VkQueueFamilyProperties> queue_families(count_queue_family);
+	vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count_queue_family, queue_families.data());
+
+	int i = 0;
+	for (const auto& queue_family : queue_families)
+	{
+		if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+		{
+			indices.gaphics_family = i;
+		}
+
+		if (indices.is_complete())
+		{
+			break;
+		}
+
+		i++;
+	}
+
+	return indices;
+}
+
+static bool is_physical_device_suitable(VkPhysicalDevice physical_device)
+{
+	QueueFamilyIndices indices = find_queue_families(physical_device);
+	return indices.is_complete();
+}
 
 Renderer::Renderer(Window& window, LucidaConfig& lc)
 	: m_window{window}
@@ -184,14 +235,33 @@ void Renderer::select_physical_device()
 {
 	uint32_t count_physical_devices;
 	vkEnumeratePhysicalDevices(m_context.instance, &count_physical_devices, nullptr);
+	if (!count_physical_devices)
+	{
+		throw std::runtime_error("failed to find GPUs with vulkan support");
+	}
+
 	std::vector<VkPhysicalDevice> physical_devices(count_physical_devices);
 	vkEnumeratePhysicalDevices(m_context.instance, &count_physical_devices, physical_devices.data());
 
-	if (!count_physical_devices)
+	std::multimap<int, VkPhysicalDevice> candidates;
+	for (const auto& physical_device : physical_devices)
 	{
-		throw std::runtime_error("no suitable devices");
+		if (is_physical_device_suitable(physical_device))
+		{
+			int score = rate_physical_device_suitability(physical_device);
+			candidates.insert(std::make_pair(score, physical_device));
+		}
 	}
 
-	// TODO: Select best physical device
-	m_context.physical_device = physical_devices[0];
+	if (candidates.rbegin()->first > 0)
+	{
+		m_context.physical_device = candidates.rbegin()->second;
+		vkGetPhysicalDeviceProperties(candidates.rbegin()->second, &m_context.physical_device_properties);
+		jdebug("Selected physical device: {}", m_context.physical_device_properties.deviceName);
+		jdebug("Selected physical device score: {}", candidates.rbegin()->first);
+	}
+	else
+	{
+		throw std::runtime_error("failed to find a suitable GPU");
+	}
 }

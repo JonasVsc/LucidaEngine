@@ -10,6 +10,7 @@
 
 // std
 #include <vector>
+#include <optional>
 
 #define VK_CHECK(x)																							\
 	do																										\
@@ -22,10 +23,23 @@
 		}																									\
 	} while (0)
 
+struct QueueFamilyIndices {
+	std::optional<uint32_t> gaphics_family;
+
+	bool is_complete()
+	{
+		return gaphics_family.has_value();
+	}
+};
+
 struct VulkanContext {
 	VkInstance instance = VK_NULL_HANDLE;
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
 	VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+
+
+	// Utility
+	VkPhysicalDeviceProperties physical_device_properties;
 };
 
 class Window;
