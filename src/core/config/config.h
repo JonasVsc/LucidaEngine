@@ -8,10 +8,10 @@ using json = nlohmann::json;
 #include <string>
 #include <vector>
 
-class LucidaConfig {
+class Config {
 public:
 
-	LucidaConfig(const std::string& path);
+	Config(const std::string& path);
 
 	// APP
 	std::string get_app_name() { return m_config["app"]["name"]; }

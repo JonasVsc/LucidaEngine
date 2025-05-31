@@ -1,17 +1,15 @@
 #pragma once
 
-// lucida
-#include "config/lucida_config.h"
-
 // lib
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
 
+class Config;
 
 class Window {
 public:
 
-	Window( LucidaConfig& lc);
+	Window(Config& lc);
 
 	~Window();
 

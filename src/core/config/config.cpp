@@ -1,12 +1,12 @@
-#include "lucida_config.h"
+#include "config.h"
 
-// lucida
-#include "debug/log.h"
+// core
+#include "core/log.h"
 
 // std
 #include <fstream>
 
-LucidaConfig::LucidaConfig(const std::string& path)
+Config::Config(const std::string& path)
 {
 	std::ifstream file(path);
 
@@ -22,7 +22,7 @@ LucidaConfig::LucidaConfig(const std::string& path)
 	file.close();
 }
 
-void LucidaConfig::default_config()
+void Config::default_config()
 {
 	m_config = json::parse( R"(
 	  {
