@@ -7,7 +7,7 @@ if (POLICY CMP0141)
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
-set(VULKAN_SDK "C:\\VulkanSDK\\1.4.313.0\\")
+set(VULKAN_SDK "C:\\VulkanSDK\\1.4.313.0")
 
 project ("Lucida")
 
@@ -17,28 +17,38 @@ add_subdirectory(3rdparty/json)
 
 include_directories(src ${VULKAN_SDK}/Include)
 
-# MODULES
-set(DEBUG_SOURCES
-	"src/debug/log.cpp"
-)
+set(CORE "src/core")
 
+# MODULES
 set(CONFIG_SOURCES
-	"src/config/lucida_config.cpp"
+	"${CORE}/config/config.cpp"
 )
 
 set(WINDOW_SOURCES
 	"src/window/window.cpp"
 )
 
-set(RENDERER_SOURCES
-	"src/renderer/renderer.cpp"
+set(GRAPHICS_SOURCES
+	"src/graphics/renderer.cpp"
+	"src/graphics/swapchain.cpp"
+	"src/graphics/device.cpp"
+)
+
+set(ENGINE_SOURCES
+	"src/engine/engine.h"
+	"src/engine/engine.cpp"
+)
+
+set(CORE_SOURCES 
+	${CONFIG_SOURCES} 
 )
 
 add_executable (Lucida 
 	"src/lucida.cpp"
-	${DEBUG_SOURCES}
-	${CONFIG_SOURCES}
+	${CORE_SOURCES}
 	${WINDOW_SOURCES}
+	${GRAPHICS_SOURCES}
+	${ENGINE_SOURCES}
 )
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)

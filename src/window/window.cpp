@@ -1,11 +1,14 @@
 #include "window.h"
-#include "debug/log.h"
 
-#include "config/lucida_config.h"
+// core
+#include "core/log.h"
+#include "core/config/config.h"
 
+// std
 #include <stdexcept>
 
-Window::Window(LucidaConfig& lc)
+
+Window::Window(Config& lc)
 {
     jinfo("window constructor");
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0)

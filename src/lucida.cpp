@@ -1,21 +1,21 @@
 ﻿#include "lucida.h"
 
+// core
+#include "core/log.h"
+
+#include "engine/engine.h"
 
 int main(int argc, char** argv)
 {
-	LucidaConfig config("lucida.json");
-	
-	Window window{ config };
+	Config config{ "lucida.json" };
+	Engine my_engine{ config };
 
 	try {
-		while (!window.closed())
-		{
-			window.process_events();
-		}
+		my_engine.run();
 	}
 	catch (std::exception& e)
 	{
-		fmt::println("exception: {}", e.what());
+		jerr("exception: {}", e.what());
 	}
 
 	return 0;
