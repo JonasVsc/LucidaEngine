@@ -13,10 +13,10 @@ public:
 
 	~Window();
 
-	Window(const Window& w) = delete;
-	Window& operator=(const Window& other) = delete;
-	Window(Window&& w) = delete;
-	Window& operator=(Window&& other) = delete; 
+	Window(const Window&) = delete;
+	Window& operator=(const Window&) = delete;
+	Window(Window&&) = delete;
+	Window& operator=(Window&&) = delete; 
 
 	// Process window events
 	void process_events();

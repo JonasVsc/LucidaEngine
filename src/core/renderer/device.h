@@ -29,7 +29,8 @@ struct SwapchainSupportDetails {
 	std::vector<VkPresentModeKHR> present_modes;
 };
 
-struct EngineContext;
+class Config;
+class Window;
 
 class Device {
 
@@ -38,9 +39,14 @@ class Device {
 	};
 
 public:
-	Device(EngineContext& ctx);
+	Device(Config& config, Window& window);
 
 	~Device();
+
+	Device(const Device&) = delete;
+	Device& operator=(const Device&) = delete;
+	Device(Device&&) = delete;
+	Device& operator=(Device&&) = delete;
 
 	SwapchainSupportDetails query_swapchain_support_details();
 	QueueFamilyIndices find_queue_families();
@@ -60,7 +66,9 @@ private:
 	QueueFamilyIndices find_queue_families(VkPhysicalDevice physical_device);
 	SwapchainSupportDetails query_swapchain_support_details(VkPhysicalDevice physical_device);
 
-	EngineContext& m_context;
+	Config& m_config;
+	Window& m_window;
+
 	VkInstance m_instance;
 	VkSurfaceKHR m_surface;
 	VkPhysicalDevice m_physical_device;

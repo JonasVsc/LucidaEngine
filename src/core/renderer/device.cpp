@@ -2,9 +2,7 @@
 
 // core
 #include "core/window/window.h"
-
 #include "core/config/config.h"
-#include "core/context.h"
 #include "core/log.h"
 
 //lib
@@ -18,12 +16,13 @@
 #include <set>
 
 
-Device::Device(EngineContext& ctx)
-	: m_context{ctx}
+Device::Device(Config& config, Window& window)
+	: m_config{config}
+	, m_window{window}
 {
 	jinfo("device constructor");
 	create_instance();
-	SDL_Vulkan_CreateSurface(m_context.window->w_sdl(), m_instance, &m_surface);
+	SDL_Vulkan_CreateSurface(m_window.w_sdl(), m_instance, &m_surface);
 	select_physical_device();
 	create_device();
 	create_allocator();
@@ -41,7 +40,7 @@ Device::~Device()
 void Device::create_instance()
 {
 	// Convert config layers string to c string style
-	std::vector<std::string> layers = m_context.config->get_layers();
+	std::vector<std::string> layers = m_config.get_layers();
 	std::vector<const char*> cLayers;
 	for (const auto& layer : layers)
 	{
@@ -49,7 +48,7 @@ void Device::create_instance()
 	}
 
 	// Convert config extensions string to c string style
-	std::vector<std::string> extensions = m_context.config->get_extensions();
+	std::vector<std::string> extensions = m_config.get_extensions();
 	std::vector<const char*> cExtensions;
 	for (const auto& ext : extensions)
 	{
@@ -101,9 +100,9 @@ void Device::create_instance()
 
 	// Required SDL Extensions
 	uint32_t count_sdl_extensions;
-	SDL_Vulkan_GetInstanceExtensions(m_context.window->w_sdl(), &count_sdl_extensions, nullptr);
+	SDL_Vulkan_GetInstanceExtensions(m_window.w_sdl(), &count_sdl_extensions, nullptr);
 	std::vector<const char*> sdl_extensions(count_sdl_extensions);
-	SDL_Vulkan_GetInstanceExtensions(m_context.window->w_sdl(), &count_sdl_extensions, sdl_extensions.data());
+	SDL_Vulkan_GetInstanceExtensions(m_window.w_sdl(), &count_sdl_extensions, sdl_extensions.data());
 
 	// Requested/Required Extensions
 	std::vector<const char*> required_extensions;
@@ -152,16 +151,16 @@ void Device::create_instance()
 #endif
 
 	uint32_t appVersion = VK_MAKE_API_VERSION(
-		0 /* VARIANT */, m_context.config->get_app_version()[0] /* MAJOR */, m_context.config->get_app_version()[1] /* MINOR */, m_context.config->get_app_version()[2] /* PATCH */);
+		0 /* VARIANT */, m_config.get_app_version()[0] /* MAJOR */, m_config.get_app_version()[1] /* MINOR */, m_config.get_app_version()[2] /* PATCH */);
 	uint32_t apiVersion = VK_MAKE_API_VERSION(
-		0 /* VARIANT */, m_context.config->get_api_version()[0] /* MAJOR */, m_context.config->get_api_version()[1] /* MINOR */, m_context.config->get_api_version()[2] /* PATCH */);
+		0 /* VARIANT */, m_config.get_api_version()[0] /* MAJOR */, m_config.get_api_version()[1] /* MINOR */, m_config.get_api_version()[2] /* PATCH */);
 	uint32_t engineVersion = VK_MAKE_API_VERSION(
-		0 /* VARIANT */, m_context.config->get_lucida_version()[0] /* MAJOR */, m_context.config->get_lucida_version()[1] /* MINOR */, m_context.config->get_lucida_version()[2] /* PATCH */);
+		0 /* VARIANT */, m_config.get_lucida_version()[0] /* MAJOR */, m_config.get_lucida_version()[1] /* MINOR */, m_config.get_lucida_version()[2] /* PATCH */);
 
 	VkApplicationInfo app_info = {
 			.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
 			.pNext = nullptr,
-			.pApplicationName = m_context.config->get_app_name().c_str(),
+			.pApplicationName = m_config.get_app_name().c_str(),
 			.applicationVersion = appVersion,
 			.pEngineName = "Lucida",
 			.engineVersion = engineVersion,

@@ -3,14 +3,14 @@
 // core
 #include "core/window/window.h"
 #include "device.h"
-#include "core/context.h"
 #include "core/log.h"
 
 // std
 #include <algorithm>
 
-Swapchain::Swapchain(EngineContext& ctx)
-	: m_context{ctx}
+Swapchain::Swapchain(Window& window, Device& device)
+	: m_window{window}
+	, m_device{ device }
 {
 	jinfo("swapchain constructor");
 	create_swapchain();
@@ -22,14 +22,14 @@ Swapchain::~Swapchain()
 	jinfo("swapchain destructor");
 	for (auto img : m_image_views)
 	{
-		vkDestroyImageView(m_context.device->get_handle(), img, nullptr);
+		vkDestroyImageView(m_device.get_handle(), img, nullptr);
 	}
-	vkDestroySwapchainKHR(m_context.device->get_handle(), m_swapchain, nullptr);
+	vkDestroySwapchainKHR(m_device.get_handle(), m_swapchain, nullptr);
 }
 
 void Swapchain::create_swapchain()
 {
-	SwapchainSupportDetails swapchain_support = m_context.device->query_swapchain_support_details();
+	SwapchainSupportDetails swapchain_support = m_device.query_swapchain_support_details();
 
 	VkSurfaceFormatKHR surface_format = choose_swapchain_surface_format(swapchain_support.formats);
 	VkPresentModeKHR present_mode = choose_swapchain_present_mode(swapchain_support.present_modes);
@@ -44,7 +44,7 @@ void Swapchain::create_swapchain()
 
 	VkSwapchainCreateInfoKHR swapchain_create_info = {
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-		.surface = m_context.device->get_surface(),
+		.surface = m_device.get_surface(),
 		.minImageCount = count_image,
 		.imageFormat = surface_format.format,
 		.imageColorSpace = surface_format.colorSpace,
@@ -57,7 +57,7 @@ void Swapchain::create_swapchain()
 		.oldSwapchain = VK_NULL_HANDLE
 	};
 
-	QueueFamilyIndices indices = m_context.device->find_queue_families();
+	QueueFamilyIndices indices = m_device.find_queue_families();
 	uint32_t queue_family_indices[] = { indices.graphics_family.value(), indices.present_family.value() };
 	if (indices.is_exclusive())
 	{
@@ -70,12 +70,12 @@ void Swapchain::create_swapchain()
 		swapchain_create_info.pQueueFamilyIndices = queue_family_indices;
 	}
 
-	VK_CHECK(vkCreateSwapchainKHR(m_context.device->get_handle(), &swapchain_create_info, nullptr, &m_swapchain));
+	VK_CHECK(vkCreateSwapchainKHR(m_device.get_handle(), &swapchain_create_info, nullptr, &m_swapchain));
 
-	vkGetSwapchainImagesKHR(m_context.device->get_handle(), m_swapchain, &count_image, nullptr);
+	vkGetSwapchainImagesKHR(m_device.get_handle(), m_swapchain, &count_image, nullptr);
 	m_images.resize(count_image);
-	vkGetSwapchainImagesKHR(m_context.device->get_handle(), m_swapchain, &count_image, nullptr);
-	vkGetSwapchainImagesKHR(m_context.device->get_handle(), m_swapchain, &count_image, m_images.data());
+	vkGetSwapchainImagesKHR(m_device.get_handle(), m_swapchain, &count_image, nullptr);
+	vkGetSwapchainImagesKHR(m_device.get_handle(), m_swapchain, &count_image, m_images.data());
 
 	m_image_format = surface_format.format;
 	m_extent = extent;
@@ -106,7 +106,7 @@ void Swapchain::create_swapchain_image_views()
 				.layerCount = 1
 			}
 		};
-		VK_CHECK(vkCreateImageView(m_context.device->get_handle(), &image_view_create_info, nullptr, &m_image_views[i]));
+		VK_CHECK(vkCreateImageView(m_device.get_handle(), &image_view_create_info, nullptr, &m_image_views[i]));
 	}
 }
 
@@ -140,7 +140,7 @@ VkExtent2D Swapchain::choose_swapchain_extent(const VkSurfaceCapabilitiesKHR& ca
 		return capabilites.currentExtent;
 	}
 	int width, height;
-	SDL_Vulkan_GetDrawableSize(m_context.window->w_sdl(), &width, &height);
+	SDL_Vulkan_GetDrawableSize(m_window.w_sdl(), &width, &height);
 
 	VkExtent2D actual_extent = {
 		static_cast<uint32_t>(width),

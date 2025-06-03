@@ -6,14 +6,20 @@
 // std
 #include <vector>
 
-struct EngineContext;
+class Device;
+class Window;
 
 class Swapchain {
 public:
 
-	Swapchain(EngineContext& ctx);
+	Swapchain(Window& window, Device& device);
 
 	~Swapchain();
+
+	Swapchain(const Swapchain&) = delete;
+	Swapchain& operator=(const Swapchain&) = delete;
+	Swapchain(Swapchain&&) = delete;
+	Swapchain& operator=(Swapchain&&) = delete;
 
 private:
 	
@@ -24,7 +30,9 @@ private:
 	VkPresentModeKHR choose_swapchain_present_mode(const std::vector<VkPresentModeKHR>& available_present_modes);
 	VkExtent2D choose_swapchain_extent(const VkSurfaceCapabilitiesKHR& capabilites);
 
-	EngineContext& m_context;
+	Window& m_window;
+	Device& m_device;
+
 	VkSwapchainKHR m_swapchain;
 	std::vector<VkImage> m_images;
 	std::vector<VkImageView> m_image_views;

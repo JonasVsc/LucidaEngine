@@ -1,10 +1,9 @@
 #include "renderer.h"
-
-#include "core/context.h"
 #include "core/log.h"
 
-Renderer::Renderer(EngineContext& ctx)
-	: m_context{ctx}
+Renderer::Renderer(Config& config, Window& window)
+	: m_config{config}
+	, m_window{window}
 {
 	jinfo("renderer constructor");
 }
