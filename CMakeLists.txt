@@ -25,24 +25,24 @@ set(CONFIG_SOURCES
 )
 
 set(WINDOW_SOURCES
-	"${CORE}/window/window.cpp"
+	"src/window/window.cpp"
 )
 
-set(RENDERER_SOURCES
-	"${CORE}/renderer/renderer.cpp"
-	"${CORE}/renderer/swapchain.cpp"
-	"${CORE}/renderer/device.cpp"
+set(GRAPHICS_SOURCES
+	"src/graphics/renderer.cpp"
+	"src/graphics/swapchain.cpp"
+	"src/graphics/device.cpp"
 )
 
 set(CORE_SOURCES 
 	${CONFIG_SOURCES} 
-	${WINDOW_SOURCES} 
-	${RENDERER_SOURCES}
 )
 
 add_executable (Lucida 
 	"src/lucida.cpp"
 	${CORE_SOURCES}
+	${WINDOW_SOURCES}
+	${GRAPHICS_SOURCES}
 )
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
