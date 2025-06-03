@@ -25,7 +25,7 @@ private:
 	
 	void create_swapchain();
 	void create_swapchain_image_views();
-
+	
 	VkSurfaceFormatKHR choose_swapchain_surface_format(const std::vector<VkSurfaceFormatKHR>& available_formats);
 	VkPresentModeKHR choose_swapchain_present_mode(const std::vector<VkPresentModeKHR>& available_present_modes);
 	VkExtent2D choose_swapchain_extent(const VkSurfaceCapabilitiesKHR& capabilites);

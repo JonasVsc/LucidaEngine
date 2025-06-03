@@ -24,5 +24,7 @@ private:
 	Window& m_window;
 
 	Device m_device{ m_config, m_window };
-	Swapchain m_wapchain{ m_window, m_device };
+	Swapchain m_swapchain{ m_window, m_device };
+
+
 };
