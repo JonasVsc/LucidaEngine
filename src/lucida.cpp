@@ -1,6 +1,4 @@
-﻿#include "lucida.h"
-
-// core
+﻿// core
 #include "core/log.h"
 
 #include "engine/engine.h"
