@@ -1,4 +1,6 @@
 #include "renderer.h"
+
+// core
 #include "core/log.h"
 
 Renderer::Renderer(Config& config, Window& window)

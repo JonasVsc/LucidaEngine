@@ -1,9 +1,10 @@
 #include "device.h"
 
 // core
-#include "core/window/window.h"
 #include "core/config/config.h"
 #include "core/log.h"
+
+#include "window/window.h"
 
 //lib
 #define VMA_IMPLEMENTATION

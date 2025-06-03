@@ -1,9 +1,10 @@
 #include "swapchain.h"
 
 // core
-#include "core/window/window.h"
-#include "device.h"
 #include "core/log.h"
+
+#include "window/window.h"
+#include "device.h"
 
 // std
 #include <algorithm>

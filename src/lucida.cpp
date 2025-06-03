@@ -1,9 +1,11 @@
 ﻿#include "lucida.h"
 
+// core
 #include "core/config/config.h"
-#include "core/window/window.h"
-#include "core/renderer/renderer.h"
 #include "core/log.h"
+
+#include "window/window.h"
+#include "graphics/renderer.h"
 
 int main(int argc, char** argv)
 {

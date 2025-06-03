@@ -4,7 +4,6 @@
 #include "core/log.h"
 #include "core/config/config.h"
 
-
 // std
 #include <stdexcept>
 
