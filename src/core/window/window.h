@@ -1,23 +1,22 @@
 #pragma once
 
-// lucida
-#include "config/lucida_config.h"
-
 // lib
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_vulkan.h>
 
+class Config;
 
 class Window {
 public:
 
-	Window( LucidaConfig& lc);
+	Window(Config& lc);
 
 	~Window();
 
-	Window(const Window& w) = delete;
-	Window& operator=(const Window& other) = delete;
-	Window(Window&& w) = delete;
-	Window& operator=(Window&& other) = delete; 
+	Window(const Window&) = delete;
+	Window& operator=(const Window&) = delete;
+	Window(Window&&) = delete;
+	Window& operator=(Window&&) = delete; 
 
 	// Process window events
 	void process_events();

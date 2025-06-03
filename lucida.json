@@ -1,0 +1,23 @@
+{
+  "lucida": {
+    "version": [ 0, 0, 1 ]
+  },
+  "app": {
+    "name": "Lucida Application",
+    "version": [ 0, 0, 1 ]
+  },
+  "renderer": {
+    "vulkan": {
+      "version": [ 1, 4, 0 ],
+      "layers": [ "VK_LAYER_KHRONOS_validation" ],
+      "extensions": []
+    }
+  },
+  "window": {
+    "title": "Lucida Application",
+    "width": 640,
+    "height": 480,
+    "fullscreen": false,
+    "resizable": false
+  }
+}
