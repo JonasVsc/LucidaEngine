@@ -34,6 +34,11 @@ set(GRAPHICS_SOURCES
 	"src/graphics/device.cpp"
 )
 
+set(ENGINE_SOURCES
+	"src/engine/engine.h"
+	"src/engine/engine.cpp"
+)
+
 set(CORE_SOURCES 
 	${CONFIG_SOURCES} 
 )
@@ -43,6 +48,7 @@ add_executable (Lucida
 	${CORE_SOURCES}
 	${WINDOW_SOURCES}
 	${GRAPHICS_SOURCES}
+	${ENGINE_SOURCES}
 )
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
