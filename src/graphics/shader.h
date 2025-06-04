@@ -6,10 +6,12 @@
 // std
 #include <string>
 
+class Device;
+
 class Shader {
 public:
 
-	Shader(VkDevice device, const std::string& filename);
+	Shader(Device& device, const std::string& filename);
 	~Shader();
 
 	Shader(const Shader&) = delete;
@@ -21,7 +23,7 @@ public:
 
 private:
 
-	VkDevice m_device;
+	Device& m_device;
 	
 	VkShaderModule m_shader_module = VK_NULL_HANDLE;
 };

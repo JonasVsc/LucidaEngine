@@ -3,9 +3,10 @@
 // core
 #include "core/log.h"
 
+#include "device.h"
 #include "utils.h"
 
-Shader::Shader(VkDevice device, const std::string& filename)
+Shader::Shader(Device& device, const std::string& filename)
 	: m_device{device}
 {
 	auto buffer = read_file(filename);
@@ -19,10 +20,10 @@ Shader::Shader(VkDevice device, const std::string& filename)
 		.pCode = spirv.data(),
 	};
 
-	VK_CHECK(vkCreateShaderModule(device, &shader_module_create_info, nullptr, &m_shader_module));
+	VK_CHECK(vkCreateShaderModule(m_device.get_handle(), &shader_module_create_info, nullptr, &m_shader_module));
 }
 
 Shader::~Shader()
 {
-	vkDestroyShaderModule(m_device, m_shader_module, nullptr);
+	vkDestroyShaderModule(m_device.get_handle(), m_shader_module, nullptr);
 }

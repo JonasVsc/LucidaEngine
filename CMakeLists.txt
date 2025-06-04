@@ -30,10 +30,12 @@ set(WINDOW_SOURCES
 
 set(GRAPHICS_SOURCES
 	"src/graphics/renderer.cpp"
-	"src/graphics/pipeline.cpp"
 	"src/graphics/shader.cpp"
 	"src/graphics/swapchain.cpp"
 	"src/graphics/device.cpp"
+	"src/graphics/pipeline.cpp"
+	"src/graphics/pipeline_builder.cpp"
+	"src/graphics/vertex.cpp"
 )
 
 set(ENGINE_SOURCES
@@ -81,3 +83,6 @@ target_link_libraries(Lucida
 
 # DEPENDENCIES
 file(COPY ${CMAKE_SOURCE_DIR}/lucida.json DESTINATION ${CMAKE_BINARY_DIR})
+
+# ASSETS
+file(COPY ${CMAKE_SOURCE_DIR}/src/shaders/spv DESTINATION ${CMAKE_BINARY_DIR}/shaders)

@@ -21,6 +21,8 @@ public:
 	Swapchain(Swapchain&&) = delete;
 	Swapchain& operator=(Swapchain&&) = delete;
 
+	VkFormat get_image_format() { return m_image_format; }
+
 private:
 	
 	void create_swapchain();
