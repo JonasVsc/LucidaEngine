@@ -30,25 +30,33 @@ set(WINDOW_SOURCES
 
 set(GRAPHICS_SOURCES
 	"src/graphics/renderer.cpp"
+	"src/graphics/shader.cpp"
 	"src/graphics/swapchain.cpp"
 	"src/graphics/device.cpp"
+	"src/graphics/pipeline.cpp"
+	"src/graphics/pipeline_builder.cpp"
+	"src/graphics/vertex.cpp"
 )
 
 set(ENGINE_SOURCES
-	"src/engine/engine.h"
 	"src/engine/engine.cpp"
+)
+
+set(UTILS_SOURCES
+	"src/utils.cpp"
 )
 
 set(CORE_SOURCES 
 	${CONFIG_SOURCES} 
 )
 
-add_executable (Lucida 
+add_executable (Lucida
 	"src/lucida.cpp"
 	${CORE_SOURCES}
 	${WINDOW_SOURCES}
 	${GRAPHICS_SOURCES}
 	${ENGINE_SOURCES}
+	${UTILS_SOURCES}
 )
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
@@ -75,3 +83,6 @@ target_link_libraries(Lucida
 
 # DEPENDENCIES
 file(COPY ${CMAKE_SOURCE_DIR}/lucida.json DESTINATION ${CMAKE_BINARY_DIR})
+
+# ASSETS
+file(COPY ${CMAKE_SOURCE_DIR}/src/shaders/spv DESTINATION ${CMAKE_BINARY_DIR}/shaders)
