@@ -12,56 +12,22 @@ set(VULKAN_SDK "C:\\VulkanSDK\\1.4.313.0")
 project ("Lucida")
 
 # PACKAGES
-add_subdirectory(3rdparty/fmt)
-add_subdirectory(3rdparty/json)
-
-include_directories(src ${VULKAN_SDK}/Include)
-
-set(CORE "src/core")
+include_directories(src ${VULKAN_SDK}/Include include)
 
 # MODULES
-set(CONFIG_SOURCES
-	"${CORE}/config/config.cpp"
+set(WINDOW
+	"src/window.cpp"
 )
 
-set(WINDOW_SOURCES
-	"src/window/window.cpp"
-)
-
-set(GRAPHICS_SOURCES
-	"src/graphics/renderer.cpp"
-	"src/graphics/shader.cpp"
-	"src/graphics/swapchain.cpp"
-	"src/graphics/device.cpp"
-	"src/graphics/pipeline.cpp"
-	"src/graphics/pipeline_builder.cpp"
-	"src/graphics/vertex.cpp"
-)
-
-set(ENGINE_SOURCES
-	"src/engine/engine.cpp"
-)
-
-set(UTILS_SOURCES
-	"src/utils.cpp"
-)
-
-set(CORE_SOURCES 
-	${CONFIG_SOURCES} 
+set(RENDERER
+	"src/renderer.cpp"
 )
 
 add_executable (Lucida
-	"src/lucida.cpp"
-	${CORE_SOURCES}
-	${WINDOW_SOURCES}
-	${GRAPHICS_SOURCES}
-	${ENGINE_SOURCES}
-	${UTILS_SOURCES}
+	"src/main.cpp"
+	${RENDERER}
+	${WINDOW}
 )
-
-if (CMAKE_VERSION VERSION_GREATER 3.12)
-  set_property(TARGET Lucida PROPERTY CXX_STANDARD 20)
-endif()
 
 set(SDL2_LIB
 	"${VULKAN_SDK}/Lib/SDL2main.lib"
@@ -72,17 +38,6 @@ set(VULKAN_LIB
 	"${VULKAN_SDK}/Lib/vulkan-1.lib"
 )
 
-set(MISC_LIB
-	fmt::fmt nlohmann_json::nlohmann_json
-)
-
 target_link_libraries(Lucida 
-	PRIVATE ${MISC_LIB} ${SDL2_LIB} ${VULKAN_LIB}
+	PRIVATE ${SDL2_LIB} ${VULKAN_LIB}
 )
-
-
-# DEPENDENCIES
-file(COPY ${CMAKE_SOURCE_DIR}/lucida.json DESTINATION ${CMAKE_BINARY_DIR})
-
-# ASSETS
-file(COPY ${CMAKE_SOURCE_DIR}/src/shaders/spv DESTINATION ${CMAKE_BINARY_DIR}/shaders)
