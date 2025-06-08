@@ -21,8 +21,11 @@
 // forward declarations
 struct LeWindow;
 
-struct LeRendererCreateInfo {
-    LeWindow* pWindow;
+
+struct SwapchainSupportDetails {
+	VkSurfaceCapabilitiesKHR capabilities;
+	VkSurfaceFormatKHR* formats;
+	VkPresentModeKHR* presentModes;
 };
 
 struct QueueFamilyIndices {
@@ -30,15 +33,33 @@ struct QueueFamilyIndices {
 	uint32_t presentFamily;
 };
 
-struct LeRenderer {
-    VkInstance instance;
+struct LeDevice {
+	VkInstance instance;
 	VkSurfaceKHR surface;
 	VkPhysicalDevice physicalDevice;
-	VkDevice device;
+	SwapchainSupportDetails details;
+	VkDevice handle;
 	VkQueue graphicsQueue;
 	VkQueue presentQueue;
+	QueueFamilyIndices queueIndices;
 	VmaAllocator allocator;
-	QueueFamilyIndices indices;
+};
+
+struct LeSwapchain {
+	VkSwapchainKHR handle;
+	uint32_t imageCount;
+	VkImage* image;
+	VkImageView* imageView;
+	VkSurfaceFormatKHR format;
+};
+
+struct LeRendererCreateInfo {
+    LeWindow* pWindow;
+};
+
+struct LeRenderer {
+	LeDevice device;
+	LeSwapchain swapchain;
     LeWindow* pWindow;
 };
 
