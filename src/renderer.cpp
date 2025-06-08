@@ -105,6 +105,9 @@ void leRendererShutdown(LeRenderer* pRenderer)
 	{
 		return;
 	}
+
+	free(pRenderer->device.details.formats);
+	free(pRenderer->device.details.presentModes);
 	
 	for (uint32_t i = 0; i < pRenderer->swapchain.imageCount; ++i)
 	{
