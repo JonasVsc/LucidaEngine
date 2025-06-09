@@ -66,6 +66,10 @@ struct LeRenderer {
 	VkRenderPass renderPass;
 	VkFramebuffer* pFramebuffers;
 	uint32_t framebufferCount;
+
+	VkCommandPool commandPool;
+	VkCommandBuffer* commandBuffers;
+	uint32_t commandBufferCount;
 };
 
 LeResult leRendererInit(const LeRendererCreateInfo* pCreateInfo, LeRenderer* pRenderer);

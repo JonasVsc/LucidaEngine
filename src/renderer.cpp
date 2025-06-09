@@ -53,6 +53,17 @@ struct LeFramebufferCreateInfo {
 	VkExtent2D swapchainExtent;
 };
 
+struct LeCommandPoolCreateInfo {
+	VkDevice device;
+	uint32_t queueIndex;
+};
+
+struct LeCommandBufferCreateInfo {
+	VkDevice device;
+	VkCommandPool commandPool;
+	uint32_t count;
+};
+
 static void leCreateInstance(const LeWindow* pWindow, VkInstance* pInstance);
 static void leSelectPhysicalDevice(const LePhysicalDeviceSelectInfo* pSelectInfo, VkPhysicalDevice* pPhysicalDevice, QueueFamilyIndices* pIndices, SwapchainSupportDetails* pSwapchainDetails);
 static void leCreateDevice(const LeDeviceCreateInfo* pCreateInfo, VkDevice* pDevice);
@@ -62,6 +73,9 @@ static void leCreateSwapchainImages(const LeSwapchainImagesCreateInfo* pCreateIn
 static void leCreateSwapchainImageViews(const LeSwapchainImageViewCreateInfo* pCreateInfo, VkImageView** ppImageViews);
 static void leCreateRenderPass(const LeRenderPassCreateInfo* pCreateInfo, VkRenderPass* pRenderPass);
 static void leCreateFramebuffers(const LeFramebufferCreateInfo* pCreateInfo, VkFramebuffer** ppFramebuffers, uint32_t* pFramebuferCount);
+static void leCreateCommandPool(const LeCommandPoolCreateInfo* pCreateInfo, VkCommandPool* pCommandPool);
+static void leCreateCommandBuffers(const LeCommandBufferCreateInfo* pCreateInfo, VkCommandBuffer** ppCommandBuffer, uint32_t* pCommandBufferCount);
+
 
 LeResult leRendererInit(const LeRendererCreateInfo* pCreateInfo, LeRenderer* pRenderer)
 {
@@ -125,6 +139,19 @@ LeResult leRendererInit(const LeRendererCreateInfo* pCreateInfo, LeRenderer* pRe
 
 	leCreateFramebuffers(&framebufferCI, &pRenderer->pFramebuffers, &pRenderer->framebufferCount);
 
+	LeCommandPoolCreateInfo commandPoolCI{};
+	commandPoolCI.device = pRenderer->device.handle;
+	commandPoolCI.queueIndex = pRenderer->device.queueIndices.graphicsFamily;
+
+	leCreateCommandPool(&commandPoolCI, &pRenderer->commandPool);
+
+	LeCommandBufferCreateInfo commandBufferCI{};
+	commandBufferCI.device = pRenderer->device.handle;
+	commandBufferCI.commandPool = pRenderer->commandPool;
+	commandBufferCI.count = pRenderer->swapchain.imageCount;
+
+	leCreateCommandBuffers(&commandBufferCI, &pRenderer->commandBuffers, &pRenderer->commandBufferCount);
+
 	return LE_SUCCESS;
 }
 
@@ -137,6 +164,10 @@ void leRendererDestroy(LeRenderer* pRenderer)
 
 	free(pRenderer->device.details.formats);
 	free(pRenderer->device.details.presentModes);
+
+	vkDestroyCommandPool(pRenderer->device.handle, pRenderer->commandPool, nullptr);
+
+	free(pRenderer->commandBuffers);
 
 	for (uint32_t i = 0; i < pRenderer->framebufferCount; ++i)
 	{
@@ -563,7 +594,7 @@ static void leCreateRenderPass(const LeRenderPassCreateInfo* pCreateInfo, VkRend
 	VK_CHECK(vkCreateRenderPass(pCreateInfo->device, &renderPassCI, nullptr, pRenderPass));
 }
 
-void leCreateFramebuffers(const LeFramebufferCreateInfo* pCreateInfo, VkFramebuffer** ppFramebuffers, uint32_t* pFramebuferCount)
+static void leCreateFramebuffers(const LeFramebufferCreateInfo* pCreateInfo, VkFramebuffer** ppFramebuffers, uint32_t* pFramebuferCount)
 {
 	*ppFramebuffers = (VkFramebuffer*)malloc(pCreateInfo->framebufferCount * sizeof(VkFramebuffer));
 	assert(*ppFramebuffers != NULL && "heap allocation failed");
@@ -585,6 +616,34 @@ void leCreateFramebuffers(const LeFramebufferCreateInfo* pCreateInfo, VkFramebuf
 	}
 
 	*pFramebuferCount = pCreateInfo->framebufferCount;
+}
+
+static void leCreateCommandPool(const LeCommandPoolCreateInfo* pCreateInfo, VkCommandPool* pCommandPool)
+{
+	VkCommandPoolCreateInfo commandPoolCI{};
+	commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	commandPoolCI.queueFamilyIndex = pCreateInfo->queueIndex;
+	commandPoolCI.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+	VK_CHECK(vkCreateCommandPool(pCreateInfo->device, &commandPoolCI, nullptr, pCommandPool));
+}
+
+static void leCreateCommandBuffers(const LeCommandBufferCreateInfo* pCreateInfo, VkCommandBuffer** ppCommandBuffers, uint32_t* pCommandBufferCount)
+{
+	*ppCommandBuffers = (VkCommandBuffer*)malloc(pCreateInfo->count * sizeof(VkCommandBuffer));
+	assert(*ppCommandBuffers != NULL && "heap allocation failed");
+
+
+	VkCommandBufferAllocateInfo commandBufferCI{};
+	commandBufferCI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	commandBufferCI.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	commandBufferCI.commandPool = pCreateInfo->commandPool;
+	commandBufferCI.commandBufferCount = pCreateInfo->count;
+
+	VK_CHECK(vkAllocateCommandBuffers(pCreateInfo->device, &commandBufferCI, &(*ppCommandBuffers)[0]));
+
+	*pCommandBufferCount = pCreateInfo->count;
+
 }
 
 
