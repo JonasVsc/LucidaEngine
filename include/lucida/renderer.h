@@ -51,6 +51,7 @@ struct LeSwapchain {
 	VkImage* image;
 	VkImageView* imageView;
 	VkSurfaceFormatKHR format;
+	VkExtent2D extent;
 };
 
 struct LeRendererCreateInfo {
@@ -61,7 +62,11 @@ struct LeRenderer {
 	LeDevice device;
 	LeSwapchain swapchain;
     LeWindow* pWindow;
+
+	VkRenderPass renderPass;
+	VkFramebuffer* pFramebuffers;
+	uint32_t framebufferCount;
 };
 
 LeResult leRendererInit(const LeRendererCreateInfo* pCreateInfo, LeRenderer* pRenderer);
-void leRendererShutdown(LeRenderer* pRenderer);
+void leRendererDestroy(LeRenderer* pRenderer);

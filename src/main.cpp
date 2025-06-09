@@ -23,7 +23,7 @@ int main(int argc, char **argv)
 		leWindowUpdate(&window);
 	}
 
-	leRendererShutdown(&renderer);
+	leRendererDestroy(&renderer);
 	leWindowDestroy(&window);
 	return 0; 
 }

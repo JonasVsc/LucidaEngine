@@ -40,14 +40,28 @@ struct LeSwapchainImageViewCreateInfo {
 	VkSurfaceFormatKHR format;
 };
 
-// Create vulkan instance
+struct LeRenderPassCreateInfo {
+	VkDevice device;
+	VkFormat colorFormat;
+};
+
+struct LeFramebufferCreateInfo {
+	VkDevice device;
+	VkRenderPass renderPass;
+	uint32_t framebufferCount;
+	VkImageView* pSwapchainImageViews;
+	VkExtent2D swapchainExtent;
+};
+
 static void leCreateInstance(const LeWindow* pWindow, VkInstance* pInstance);
 static void leSelectPhysicalDevice(const LePhysicalDeviceSelectInfo* pSelectInfo, VkPhysicalDevice* pPhysicalDevice, QueueFamilyIndices* pIndices, SwapchainSupportDetails* pSwapchainDetails);
 static void leCreateDevice(const LeDeviceCreateInfo* pCreateInfo, VkDevice* pDevice);
 static void leCreateAllocator(const LeAllocatorCreateInfo* pCreateInfo, VmaAllocator* pAllocator);
-static void leCreateSwapchain(const LeWindow* pWindow, const LeSwapchainCreateInfo* pCreateInfo, VkSwapchainKHR* pSwapchain, VkSurfaceFormatKHR* pFormat);
+static void leCreateSwapchain(const LeWindow* pWindow, const LeSwapchainCreateInfo* pCreateInfo, VkSwapchainKHR* pSwapchain, VkExtent2D* pExtent, VkSurfaceFormatKHR* pFormat);
 static void leCreateSwapchainImages(const LeSwapchainImagesCreateInfo* pCreateInfo, VkImage** ppImage, uint32_t* pImageCount);
 static void leCreateSwapchainImageViews(const LeSwapchainImageViewCreateInfo* pCreateInfo, VkImageView** ppImageViews);
+static void leCreateRenderPass(const LeRenderPassCreateInfo* pCreateInfo, VkRenderPass* pRenderPass);
+static void leCreateFramebuffers(const LeFramebufferCreateInfo* pCreateInfo, VkFramebuffer** ppFramebuffers, uint32_t* pFramebuferCount);
 
 LeResult leRendererInit(const LeRendererCreateInfo* pCreateInfo, LeRenderer* pRenderer)
 {
@@ -80,7 +94,7 @@ LeResult leRendererInit(const LeRendererCreateInfo* pCreateInfo, LeRenderer* pRe
 	LeSwapchainCreateInfo swapchainCI{};
 	swapchainCI.device = pRenderer->device;
 
-	leCreateSwapchain(pRenderer->pWindow, &swapchainCI, &pRenderer->swapchain.handle, &pRenderer->swapchain.format);
+	leCreateSwapchain(pRenderer->pWindow, &swapchainCI, &pRenderer->swapchain.handle, &pRenderer->swapchain.extent, &pRenderer->swapchain.format);
 
 	LeSwapchainImagesCreateInfo swapchainImagesCI{};
 	swapchainImagesCI.device = pRenderer->device.handle;
@@ -95,11 +109,26 @@ LeResult leRendererInit(const LeRendererCreateInfo* pCreateInfo, LeRenderer* pRe
 	swapchainImageViewsCI.format = pRenderer->swapchain.format;
 	
 	leCreateSwapchainImageViews(&swapchainImageViewsCI, &pRenderer->swapchain.imageView);
-	
+
+	LeRenderPassCreateInfo renderPassCI{};
+	renderPassCI.device = pRenderer->device.handle;
+	renderPassCI.colorFormat = pRenderer->swapchain.format.format;
+
+	leCreateRenderPass(&renderPassCI, &pRenderer->renderPass);
+
+	LeFramebufferCreateInfo framebufferCI{};
+	framebufferCI.device = pRenderer->device.handle;
+	framebufferCI.framebufferCount = pRenderer->swapchain.imageCount;
+	framebufferCI.pSwapchainImageViews = pRenderer->swapchain.imageView;
+	framebufferCI.renderPass = pRenderer->renderPass;
+	framebufferCI.swapchainExtent = pRenderer->swapchain.extent;
+
+	leCreateFramebuffers(&framebufferCI, &pRenderer->pFramebuffers, &pRenderer->framebufferCount);
+
 	return LE_SUCCESS;
 }
 
-void leRendererShutdown(LeRenderer* pRenderer)
+void leRendererDestroy(LeRenderer* pRenderer)
 {
 	if (!pRenderer)
 	{
@@ -108,7 +137,15 @@ void leRendererShutdown(LeRenderer* pRenderer)
 
 	free(pRenderer->device.details.formats);
 	free(pRenderer->device.details.presentModes);
+
+	for (uint32_t i = 0; i < pRenderer->framebufferCount; ++i)
+	{
+		vkDestroyFramebuffer(pRenderer->device.handle, pRenderer->pFramebuffers[i], nullptr);
+	}
+	free(pRenderer->pFramebuffers);
 	
+	vkDestroyRenderPass(pRenderer->device.handle, pRenderer->renderPass, nullptr);
+
 	for (uint32_t i = 0; i < pRenderer->swapchain.imageCount; ++i)
 	{
 		vkDestroyImageView(pRenderer->device.handle, pRenderer->swapchain.imageView[i], nullptr);
@@ -124,6 +161,9 @@ void leRendererShutdown(LeRenderer* pRenderer)
 
 
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//  PRIVATE  /////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static void leCreateInstance(const LeWindow* pWindow, VkInstance* instance)
 {
@@ -350,7 +390,7 @@ static void leCreateAllocator(const LeAllocatorCreateInfo* pCreateInfo, VmaAlloc
 	VK_CHECK(vmaCreateAllocator(&allocatorCI, pAllocator));
 }
 
-static void leCreateSwapchain(const LeWindow* pWindow, const LeSwapchainCreateInfo* pCreateInfo, VkSwapchainKHR* pSwapchain, VkSurfaceFormatKHR* pFormat)
+static void leCreateSwapchain(const LeWindow* pWindow, const LeSwapchainCreateInfo* pCreateInfo, VkSwapchainKHR* pSwapchain, VkExtent2D* pExtent, VkSurfaceFormatKHR* pFormat)
 {
 	uint32_t imageCount = pCreateInfo->device.details.capabilities.minImageCount + 1;
 
@@ -442,6 +482,7 @@ static void leCreateSwapchain(const LeWindow* pWindow, const LeSwapchainCreateIn
 	VK_CHECK(vkCreateSwapchainKHR(pCreateInfo->device.handle, &swapchainCI, nullptr, pSwapchain));
 
 	*pFormat = selectedSurfaceFormat;
+	*pExtent = selectedExtent;
 }
 
 static void leCreateSwapchainImages(const LeSwapchainImagesCreateInfo* pCreateInfo, VkImage** ppImages, uint32_t* pImageCount)
@@ -477,5 +518,75 @@ static void leCreateSwapchainImageViews(const LeSwapchainImageViewCreateInfo* pC
 		VK_CHECK(vkCreateImageView(pCreateInfo->device, &imageViewCI, nullptr, &(*ppImageViews)[i]));
 	}
 }
+
+static void leCreateRenderPass(const LeRenderPassCreateInfo* pCreateInfo, VkRenderPass* pRenderPass)
+{
+
+	VkAttachmentDescription colorAttachment = {};
+	colorAttachment.format = pCreateInfo->colorFormat;
+	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	VkAttachmentReference colorAttachmentRef{};
+	colorAttachmentRef.attachment = 0;
+	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpass{};
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorAttachmentRef;
+
+	VkSubpassDependency dependency{};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.srcAccessMask = 0;
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	dependency.dstSubpass = 0;
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+	VkAttachmentDescription attachments[] = { colorAttachment };
+
+	VkRenderPassCreateInfo renderPassCI{};
+	renderPassCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassCI.attachmentCount = 1;
+	renderPassCI.pAttachments = attachments;
+	renderPassCI.subpassCount = 1;
+	renderPassCI.pSubpasses = &subpass;
+	renderPassCI.dependencyCount = 1;
+	renderPassCI.pDependencies = &dependency;
+
+	VK_CHECK(vkCreateRenderPass(pCreateInfo->device, &renderPassCI, nullptr, pRenderPass));
+}
+
+void leCreateFramebuffers(const LeFramebufferCreateInfo* pCreateInfo, VkFramebuffer** ppFramebuffers, uint32_t* pFramebuferCount)
+{
+	*ppFramebuffers = (VkFramebuffer*)malloc(pCreateInfo->framebufferCount * sizeof(VkFramebuffer));
+	assert(*ppFramebuffers != NULL && "heap allocation failed");
+
+	for (uint32_t i = 0; i < pCreateInfo->framebufferCount; ++i)
+	{
+		VkImageView attachments[] = { pCreateInfo->pSwapchainImageViews[i] };
+
+		VkFramebufferCreateInfo framebufferCI{};
+		framebufferCI.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferCI.renderPass = pCreateInfo->renderPass;
+		framebufferCI.attachmentCount = 1;
+		framebufferCI.pAttachments = attachments;
+		framebufferCI.width = pCreateInfo->swapchainExtent.width;
+		framebufferCI.height = pCreateInfo->swapchainExtent.height;
+		framebufferCI.layers = 1;
+	
+		VK_CHECK(vkCreateFramebuffer(pCreateInfo->device, &framebufferCI, nullptr, &(*ppFramebuffers)[i]));
+	}
+
+	*pFramebuferCount = pCreateInfo->framebufferCount;
+}
+
+
 
 
