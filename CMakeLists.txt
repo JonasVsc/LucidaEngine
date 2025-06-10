@@ -12,7 +12,7 @@ set(VULKAN_SDK "C:\\VulkanSDK\\1.4.313.0")
 project ("Lucida")
 
 # PACKAGES
-include_directories(src ${VULKAN_SDK}/Include include)
+include_directories(src ${VULKAN_SDK}/Include)
 
 # MODULES
 set(WINDOW

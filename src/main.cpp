@@ -1,29 +1,24 @@
-#include "lucida/lucida.h"
-#include <assert.h>
+#include "window.h"
+#include "renderer.h"
+
+// GLOBALS
+
 
 int main(int argc, char **argv) 
 {
-	// Create Window
-	LeWindowCreateInfo windowCI{};
-	windowCI.title = "Lucida Window";
-	windowCI.extent = { 640, 480 };
+	LeWindow window;
+	LeRenderer renderer;
 
-	LeWindow window{};
-	leWindowCreate(&windowCI, &window);
+	LeWindowCreateInfo windowCI{ "Lucida Game", 640, 480 };
+	leWindowCreate(windowCI, window);
+	leRendererCreate(window, renderer);
 
-	// Create Renderer
-	LeRendererCreateInfo rendererCI{};
-	rendererCI.pWindow = &window;
-
-	LeRenderer renderer{};
-	leRendererInit(&rendererCI, &renderer);
-
-	while(!window.shouldClose)
+	while (!window.shouldClose)
 	{
-		leWindowUpdate(&window);
+		leWindowPoolEvents(window);
 	}
 
-	leRendererDestroy(&renderer);
-	leWindowDestroy(&window);
+	leRendererDestroy(renderer);
+	leWindowDestroy(window);
 	return 0; 
 }

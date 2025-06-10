@@ -1,695 +1,506 @@
-#include "lucida/renderer.h"
-#include "lucida/window.h"
+#include "renderer.h"
+#include "window.h"
 
 #define VMA_IMPLEMENTATION
 #include <vma/vk_mem_alloc.h>
 
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
-
-struct LePhysicalDeviceSelectInfo {
-	VkInstance instance;
-	VkSurfaceKHR surface;
-};
-
-struct LeDeviceCreateInfo {
-	VkPhysicalDevice physicalDevice;
-	QueueFamilyIndices indices;
-};
-
-struct LeAllocatorCreateInfo {
-	VkInstance instance;
-	VkPhysicalDevice physicalDevice;
-	VkDevice device;
-};
-
-struct LeSwapchainCreateInfo {
-	LeDevice device;
-};
-
-struct LeSwapchainImagesCreateInfo {
-	VkDevice device;
-	VkSwapchainKHR swapchain;
-};
-
-struct LeSwapchainImageViewCreateInfo {
-	VkDevice device;
-	uint32_t imageCount;
-	const VkImage* pImages;
-	VkSurfaceFormatKHR format;
-};
-
-struct LeRenderPassCreateInfo {
-	VkDevice device;
-	VkFormat colorFormat;
-};
-
-struct LeFramebufferCreateInfo {
-	VkDevice device;
-	VkRenderPass renderPass;
-	uint32_t framebufferCount;
-	VkImageView* pSwapchainImageViews;
-	VkExtent2D swapchainExtent;
-};
-
-struct LeCommandPoolCreateInfo {
-	VkDevice device;
-	uint32_t queueIndex;
-};
-
-struct LeCommandBufferCreateInfo {
-	VkDevice device;
-	VkCommandPool commandPool;
-	uint32_t count;
-};
-
-static void leCreateInstance(const LeWindow* pWindow, VkInstance* pInstance);
-static void leSelectPhysicalDevice(const LePhysicalDeviceSelectInfo* pSelectInfo, VkPhysicalDevice* pPhysicalDevice, QueueFamilyIndices* pIndices, SwapchainSupportDetails* pSwapchainDetails);
-static void leCreateDevice(const LeDeviceCreateInfo* pCreateInfo, VkDevice* pDevice);
-static void leCreateAllocator(const LeAllocatorCreateInfo* pCreateInfo, VmaAllocator* pAllocator);
-static void leCreateSwapchain(const LeWindow* pWindow, const LeSwapchainCreateInfo* pCreateInfo, VkSwapchainKHR* pSwapchain, VkExtent2D* pExtent, VkSurfaceFormatKHR* pFormat);
-static void leCreateSwapchainImages(const LeSwapchainImagesCreateInfo* pCreateInfo, VkImage** ppImage, uint32_t* pImageCount);
-static void leCreateSwapchainImageViews(const LeSwapchainImageViewCreateInfo* pCreateInfo, VkImageView** ppImageViews);
-static void leCreateRenderPass(const LeRenderPassCreateInfo* pCreateInfo, VkRenderPass* pRenderPass);
-static void leCreateFramebuffers(const LeFramebufferCreateInfo* pCreateInfo, VkFramebuffer** ppFramebuffers, uint32_t* pFramebuferCount);
-static void leCreateCommandPool(const LeCommandPoolCreateInfo* pCreateInfo, VkCommandPool* pCommandPool);
-static void leCreateCommandBuffers(const LeCommandBufferCreateInfo* pCreateInfo, VkCommandBuffer** ppCommandBuffer, uint32_t* pCommandBufferCount);
-static void leCreateSyncObjects(VkDevice device, VkFence** ppInFlightFences, VkFence** ppImageInFlightFences, VkSemaphore** ppImageAvailableSemaphores, VkSemaphore** ppRenderFinishedSemaphores, uint32_t* pSyncObjectCount);
-
-LeResult leRendererInit(const LeRendererCreateInfo* pCreateInfo, LeRenderer* pRenderer)
+void leRendererCreate(LeWindow& window, LeRenderer& renderer)
 {
-	leCreateInstance(pCreateInfo->pWindow, &pRenderer->device.instance);
-	
-	SDL_Vulkan_CreateSurface(pCreateInfo->pWindow->handle, pRenderer->device.instance, &pRenderer->device.surface);
-
-	LePhysicalDeviceSelectInfo physicalDeviceSelectInfo{};
-	physicalDeviceSelectInfo.instance = pRenderer->device.instance;
-	physicalDeviceSelectInfo.surface = pRenderer->device.surface;
-	
-	leSelectPhysicalDevice(&physicalDeviceSelectInfo, &pRenderer->device.physicalDevice, &pRenderer->device.queueIndices, &pRenderer->device.details);
-
-	LeDeviceCreateInfo deviceCI{};
-	deviceCI.indices = pRenderer->device.queueIndices;
-	deviceCI.physicalDevice = pRenderer->device.physicalDevice;
-	
-	leCreateDevice(&deviceCI, &pRenderer->device.handle);
-
-	vkGetDeviceQueue(pRenderer->device.handle, pRenderer->device.queueIndices.graphicsFamily, 0, &pRenderer->device.graphicsQueue);
-	vkGetDeviceQueue(pRenderer->device.handle, pRenderer->device.queueIndices.presentFamily, 0, &pRenderer->device.presentQueue);
-
-	LeAllocatorCreateInfo allocatorCI{};
-	allocatorCI.instance = pRenderer->device.instance;
-	allocatorCI.physicalDevice = pRenderer->device.physicalDevice;
-	allocatorCI.device = pRenderer->device.handle;
-
-	leCreateAllocator(&allocatorCI, &pRenderer->device.allocator);
-
-	LeSwapchainCreateInfo swapchainCI{};
-	swapchainCI.device = pRenderer->device;
-
-	leCreateSwapchain(pRenderer->pWindow, &swapchainCI, &pRenderer->swapchain.handle, &pRenderer->swapchain.extent, &pRenderer->swapchain.format);
-
-	LeSwapchainImagesCreateInfo swapchainImagesCI{};
-	swapchainImagesCI.device = pRenderer->device.handle;
-	swapchainImagesCI.swapchain = pRenderer->swapchain.handle;
-	
-	leCreateSwapchainImages(&swapchainImagesCI, &pRenderer->swapchain.image, &pRenderer->swapchain.imageCount);
-
-	LeSwapchainImageViewCreateInfo swapchainImageViewsCI{};
-	swapchainImageViewsCI.device = pRenderer->device.handle;
-	swapchainImageViewsCI.imageCount = pRenderer->swapchain.imageCount;
-	swapchainImageViewsCI.pImages = pRenderer->swapchain.image;
-	swapchainImageViewsCI.format = pRenderer->swapchain.format;
-	
-	leCreateSwapchainImageViews(&swapchainImageViewsCI, &pRenderer->swapchain.imageView);
-
-	LeRenderPassCreateInfo renderPassCI{};
-	renderPassCI.device = pRenderer->device.handle;
-	renderPassCI.colorFormat = pRenderer->swapchain.format.format;
-
-	leCreateRenderPass(&renderPassCI, &pRenderer->renderPass);
-
-	LeFramebufferCreateInfo framebufferCI{};
-	framebufferCI.device = pRenderer->device.handle;
-	framebufferCI.framebufferCount = pRenderer->swapchain.imageCount;
-	framebufferCI.pSwapchainImageViews = pRenderer->swapchain.imageView;
-	framebufferCI.renderPass = pRenderer->renderPass;
-	framebufferCI.swapchainExtent = pRenderer->swapchain.extent;
-
-	leCreateFramebuffers(&framebufferCI, &pRenderer->pFramebuffers, &pRenderer->framebufferCount);
-
-	LeCommandPoolCreateInfo commandPoolCI{};
-	commandPoolCI.device = pRenderer->device.handle;
-	commandPoolCI.queueIndex = pRenderer->device.queueIndices.graphicsFamily;
-
-	leCreateCommandPool(&commandPoolCI, &pRenderer->commandPool);
-
-	LeCommandBufferCreateInfo commandBufferCI{};
-	commandBufferCI.device = pRenderer->device.handle;
-	commandBufferCI.commandPool = pRenderer->commandPool;
-	commandBufferCI.count = pRenderer->swapchain.imageCount;
-
-	leCreateCommandBuffers(&commandBufferCI, &pRenderer->commandBuffers, &pRenderer->commandBufferCount);
-
-	leCreateSyncObjects(pRenderer->device.handle, &pRenderer->pInFlightFences, &pRenderer->pImageInFlightFences, &pRenderer->pImageAvailableSemaphores, &pRenderer->pRenderFinishedSemaphores, &pRenderer->syncObjectsCount);
-
-	return LE_SUCCESS;
-}
-
-void leRendererDestroy(LeRenderer* pRenderer)
-{
-	if (!pRenderer)
+	// VkInstance
 	{
-		return;
-	}
+		// SDL Extensions
+		uint32_t extensionCount;
+		SDL_Vulkan_GetInstanceExtensions(window.handle, &extensionCount, nullptr);
+		std::vector<const char*> sdlExtensions(extensionCount);
+		SDL_Vulkan_GetInstanceExtensions(window.handle, &extensionCount, sdlExtensions.data());
 
-	free(pRenderer->device.details.formats);
-	free(pRenderer->device.details.presentModes);
+		// Instance Extensions
+		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+		std::vector<VkExtensionProperties> instanceExtentions(extensionCount);
+		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, instanceExtentions.data());
 
-	for (uint32_t i = 0; i < pRenderer->syncObjectsCount; ++i)
-	{
-		vkDestroyFence(pRenderer->device.handle, pRenderer->pInFlightFences[i], nullptr);
-		vkDestroySemaphore(pRenderer->device.handle, pRenderer->pImageAvailableSemaphores[i], nullptr);
-		vkDestroySemaphore(pRenderer->device.handle, pRenderer->pRenderFinishedSemaphores[i], nullptr);
-	}
-
-	free(pRenderer->pImageAvailableSemaphores);
-	free(pRenderer->pRenderFinishedSemaphores);
-	free(pRenderer->pImageInFlightFences);
-	free(pRenderer->pInFlightFences);
-
-	vkDestroyCommandPool(pRenderer->device.handle, pRenderer->commandPool, nullptr);
-
-	free(pRenderer->commandBuffers);
-
-	for (uint32_t i = 0; i < pRenderer->framebufferCount; ++i)
-	{
-		vkDestroyFramebuffer(pRenderer->device.handle, pRenderer->pFramebuffers[i], nullptr);
-	}
-	free(pRenderer->pFramebuffers);
-	
-	vkDestroyRenderPass(pRenderer->device.handle, pRenderer->renderPass, nullptr);
-
-	for (uint32_t i = 0; i < pRenderer->swapchain.imageCount; ++i)
-	{
-		vkDestroyImageView(pRenderer->device.handle, pRenderer->swapchain.imageView[i], nullptr);
-	}
-	free(pRenderer->swapchain.imageView);
-
-	vkDestroySwapchainKHR(pRenderer->device.handle, pRenderer->swapchain.handle, nullptr);
-	vmaDestroyAllocator(pRenderer->device.allocator);
-	vkDestroyDevice(pRenderer->device.handle, nullptr);
-	vkDestroySurfaceKHR(pRenderer->device.instance, pRenderer->device.surface, nullptr);
-	vkDestroyInstance(pRenderer->device.instance, nullptr);
-}
-
-
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//  PRIVATE  /////////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-static void leCreateInstance(const LeWindow* pWindow, VkInstance* instance)
-{
-	// SDL Extensions
-	uint32_t sdlExtensionCount;
-	SDL_Vulkan_GetInstanceExtensions(pWindow->handle, &sdlExtensionCount, nullptr);
-
-	const char** pSDLExtensionsArray = (const char**)malloc(sdlExtensionCount * sizeof(const char**));
-	SDL_Vulkan_GetInstanceExtensions(pWindow->handle, &sdlExtensionCount, pSDLExtensionsArray);
-	assert(pSDLExtensionsArray != NULL && "heap allocation failed");
-
-	// Instance Extensions
-	uint32_t extensionCount;
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-
-	VkExtensionProperties* pExtensionPropertiesArray = (VkExtensionProperties*)malloc(extensionCount * sizeof(VkExtensionProperties));
-	assert(pExtensionPropertiesArray != NULL && "heap allocation failed");
-
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, pExtensionPropertiesArray);
-
-	// Check Extension Support
-	for (uint32_t i = 0; i < sdlExtensionCount; ++i)
-	{
-		bool hasSupport = false;
-		for (uint32_t j = 0; j < extensionCount; ++j)
+#ifdef DEBUG
+		printf("\nRequired SDL Extensions:\n");
+		for (const auto& sdl : sdlExtensions)
 		{
-			if (!strcmp(pSDLExtensionsArray[i], pExtensionPropertiesArray[j].extensionName))
+			printf("- %s\n", sdl);
+		}
+
+		printf("\nSupported Instance Extensions:\n");
+		for (const auto& ext : instanceExtentions)
+		{
+			printf("- %s\n", ext.extensionName);
+		}
+#endif
+
+		for (const auto& sdlExt : sdlExtensions)
+		{
+			bool hasSupport = false;
+			for (const auto& ext : instanceExtentions)
 			{
-				hasSupport = true;
+				if (!strcmp(sdlExt, ext.extensionName))
+				{
+					hasSupport = true;
+					break;
+				}
+			}
+			assert(hasSupport && "unsupported extension: ");
+		}
+
+		VkApplicationInfo appInfo{
+			.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+			.apiVersion = VK_MAKE_API_VERSION(0, 1, 4, 0)
+		};
+
+		VkInstanceCreateInfo instanceCI{
+			.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+			.pApplicationInfo = &appInfo,
+			.enabledExtensionCount = static_cast<uint32_t>(sdlExtensions.size()),
+			.ppEnabledExtensionNames = sdlExtensions.data()
+		};
+
+		if (ENABLE_VALIDATION_LAYERS)
+		{
+			const char* validationsLayers[] = { "VK_LAYER_KHRONOS_validation" };
+			instanceCI.enabledLayerCount = 1;
+			instanceCI.ppEnabledLayerNames = validationsLayers;
+		}
+
+		VK_CHECK(vkCreateInstance(&instanceCI, nullptr, &renderer.instance));
+	} // End VkInstance
+
+	// Create VkSurfaceKHR
+	SDL_Vulkan_CreateSurface(window.handle, renderer.instance, &renderer.surface);
+
+
+	// Select VkPhysicalDevice
+	{
+		uint32_t physicalDeviceCount;
+		vkEnumeratePhysicalDevices(renderer.instance, &physicalDeviceCount, nullptr);
+		assert(physicalDeviceCount > 0 && "no suitable gpu found");
+		std::vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
+		vkEnumeratePhysicalDevices(renderer.instance, &physicalDeviceCount, physicalDevices.data());
+
+		bool isSuitable = false;
+		for (const auto& physicalDevice : physicalDevices)
+		{
+			uint32_t queueFamilyCount;
+			vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+			if (queueFamilyCount == 0)
+				continue;
+			std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+			vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
+
+			renderer.presentFamily = UINT32_MAX;
+			renderer.graphicsFamily = UINT32_MAX;
+			for (uint32_t index = 0; index < queueFamilyCount; ++index)
+			{
+				uint32_t presentIndex = UINT32_MAX;
+				uint32_t graphicsIndex = UINT32_MAX;
+				uint32_t presentSupport = false;
+				vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, index, renderer.surface, &presentSupport);
+
+				if (presentSupport)
+					presentIndex = index;
+				if (queueFamilies[index].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+					graphicsIndex = index;
+
+				if (presentIndex != UINT32_MAX && graphicsIndex != UINT32_MAX)
+				{
+					renderer.graphicsFamily = graphicsIndex;
+					renderer.presentFamily = presentIndex;
+					break;
+				}
+			}
+
+			if (renderer.graphicsFamily == UINT32_MAX)
+				continue;
+
+
+			// Surface capabilities
+			VkSurfaceCapabilitiesKHR capabilities;
+			vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, renderer.surface, &capabilities);
+
+			// Surface formats
+			uint32_t formatCount;
+			vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, renderer.surface, &formatCount, nullptr);
+			if (formatCount == 0)
+				continue;
+			std::vector<VkSurfaceFormatKHR> formats(formatCount);
+			vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, renderer.surface, &formatCount, formats.data());
+
+			// Surface presentModes
+			uint32_t presentModeCount;
+			vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, renderer.surface, &presentModeCount, nullptr);
+			if (presentModeCount == 0)
+				continue;
+			std::vector<VkPresentModeKHR> presentModes(presentModeCount);
+			vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, renderer.surface, &presentModeCount, presentModes.data());
+
+			renderer.swapchainDetails.capabilities = capabilities;
+			renderer.swapchainDetails.formats = formats;
+			renderer.swapchainDetails.presentModes = presentModes;
+			renderer.physicalDevice = physicalDevice;
+			isSuitable = true;
+			break;
+		}
+
+#ifdef DEBUG
+		printf("\nSelected Physical Device Info:\n");
+		printf("- Graphics Family: %d\n", renderer.graphicsFamily);
+		printf("- Present Family: %d\n", renderer.presentFamily);
+		printf("- Swapchain Details:\n");
+		printf("\t- formats: %zd\n", renderer.swapchainDetails.formats.size());
+		printf("\t- presentModes: %zd\n", renderer.swapchainDetails.presentModes.size());
+#endif
+
+	} // End VkPhysicalDevice
+
+
+	// Create VkDevice
+	{
+		bool isExclusive = renderer.graphicsFamily == renderer.presentFamily;
+
+		float queuePriority = 1.0f;
+		VkDeviceQueueCreateInfo graphicsQueueCI{
+			.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+			.queueFamilyIndex = renderer.graphicsFamily,
+			.queueCount = 1,
+			.pQueuePriorities = &queuePriority
+		};
+
+
+		VkDeviceQueueCreateInfo presentQueueCI{
+			.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+			.queueFamilyIndex = renderer.graphicsFamily,
+			.queueCount = 1,
+			.pQueuePriorities = &queuePriority
+		};
+
+		VkDeviceQueueCreateInfo queuesCI[2] = { graphicsQueueCI, presentQueueCI };
+
+		VkPhysicalDeviceFeatures features{};
+
+		const char* deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
+		VkDeviceCreateInfo deviceCI{
+			.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+			.queueCreateInfoCount = isExclusive ? (uint32_t)1 : (uint32_t)2,
+			.pQueueCreateInfos = isExclusive ? &graphicsQueueCI : queuesCI,
+			.enabledExtensionCount = 1,
+			.ppEnabledExtensionNames = &deviceExtensions,
+			.pEnabledFeatures = NULL
+		};
+
+		VK_CHECK(vkCreateDevice(renderer.physicalDevice, &deviceCI, nullptr, &renderer.device));
+
+	} // End VkDevice
+	 
+	// Create VmaAllocator
+	{
+		VmaAllocatorCreateInfo allocatorCI{
+			.physicalDevice = renderer.physicalDevice,
+			.device = renderer.device,
+			.instance = renderer.instance
+		};
+
+		VK_CHECK(vmaCreateAllocator(&allocatorCI, &renderer.allocator));
+	} // End VmaAllocator
+
+
+	// Create VkSwapchainKHR and Images, ImageViews
+	{
+		uint32_t imageCount = renderer.swapchainDetails.capabilities.minImageCount + 1;
+		if (renderer.swapchainDetails.capabilities.maxImageCount > 0 && imageCount > renderer.swapchainDetails.capabilities.maxImageCount)
+			imageCount = renderer.swapchainDetails.capabilities.maxImageCount;
+
+#ifdef DEBUG
+
+		printf("\nSwapchain:\n");
+		printf("- Images: %d\n", imageCount);
+
+#endif
+
+		// Choose surface format
+		VkSurfaceFormatKHR selectedSurfaceFormat{};
+		for (const auto& format : renderer.swapchainDetails.formats)
+		{
+			if (format.format == VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+			{
+				selectedSurfaceFormat = format;
 				break;
 			}
 		}
 
-		assert(hasSupport && "unsupported extensions found.");
-	}
+		if (selectedSurfaceFormat.format == VK_FORMAT_UNDEFINED)
+			selectedSurfaceFormat = renderer.swapchainDetails.formats[0];
 
-	// Create Instance
-	VkApplicationInfo appInfo{};
-	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	appInfo.apiVersion = VK_MAKE_API_VERSION(0, 1, 4, 0);
 
-	VkInstanceCreateInfo instanceCI{};
-	instanceCI.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	instanceCI.pApplicationInfo = &appInfo;
-	instanceCI.enabledExtensionCount = sdlExtensionCount;
-	instanceCI.ppEnabledExtensionNames = pSDLExtensionsArray;
-
-	if (VALIDATION_LAYERS)
-	{
-		const char* validationsLayers[] = {"VK_LAYER_KHRONOS_validation"};
-
-		instanceCI.enabledLayerCount = 1;
-		instanceCI.ppEnabledLayerNames = validationsLayers;
-	}
-
-	VK_CHECK(vkCreateInstance(&instanceCI, nullptr, instance));
-
-	// Free allocations
-	free(pSDLExtensionsArray);
-	free(pExtensionPropertiesArray);
-}
-
-static void leSelectPhysicalDevice(const LePhysicalDeviceSelectInfo* pSelectInfo, VkPhysicalDevice* pPhysicalDevice, QueueFamilyIndices* pIndices, SwapchainSupportDetails* pSwapchainDetails)
-{
-	// Get supported physical devices
-	uint32_t physicalDevicesCount;
-	vkEnumeratePhysicalDevices(pSelectInfo->instance, &physicalDevicesCount, nullptr);
-
-	assert(physicalDevicesCount > 0 && "no supported gpus found");
-
-	VkPhysicalDevice* pPhysicalDevicesArray = (VkPhysicalDevice*)malloc(physicalDevicesCount * sizeof(VkPhysicalDevice));
-	vkEnumeratePhysicalDevices(pSelectInfo->instance, &physicalDevicesCount, pPhysicalDevicesArray);
-
-	assert(pPhysicalDevicesArray != NULL && "heap allocation failed");
-
-	bool hasPhysicalDeviceSuitable = false;
-	for (uint32_t i = 0; i < physicalDevicesCount; ++i)
-	{
-		// Get physical device queue families
-		uint32_t queueFamilyCount{};
-		vkGetPhysicalDeviceQueueFamilyProperties(pPhysicalDevicesArray[i], &queueFamilyCount, nullptr);
-
-		if (queueFamilyCount == 0)
+		// Choose present mode
+		VkPresentModeKHR selectedPresentMode{};
+		for (const auto& presentMode : renderer.swapchainDetails.presentModes)
 		{
-			continue;
-		}
-
-		VkQueueFamilyProperties* pQueueFamiliesArray = (VkQueueFamilyProperties*)malloc(queueFamilyCount * sizeof(VkQueueFamilyProperties));
-		vkGetPhysicalDeviceQueueFamilyProperties(pPhysicalDevicesArray[i], &queueFamilyCount, pQueueFamiliesArray);
-
-		assert(pQueueFamiliesArray != NULL && "heap allocation failed");
-
-		pIndices->graphicsFamily = UINT32_MAX;
-		pIndices->presentFamily = UINT32_MAX;
-		for (uint32_t j = 0; j < queueFamilyCount; ++j)
-		{
-			uint32_t presentFamily = UINT32_MAX;
-			uint32_t graphicsFamily = UINT32_MAX;
-
-			uint32_t presentSupport = false;
-			vkGetPhysicalDeviceSurfaceSupportKHR(pPhysicalDevicesArray[i], j, pSelectInfo->surface, &presentSupport);
-
-			if (presentSupport)
+			if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR)
 			{
-				presentFamily = j;
-			}
-
-			if (pQueueFamiliesArray[j].queueFlags & VK_QUEUE_GRAPHICS_BIT)
-			{
-				graphicsFamily = j;
-			}
-
-			if (presentSupport && graphicsFamily != UINT32_MAX)
-			{
-				pIndices->graphicsFamily = presentFamily;
-				pIndices->presentFamily = graphicsFamily;
+				selectedPresentMode = presentMode;
 				break;
 			}
 		}
 
-		if (pIndices->graphicsFamily == UINT32_MAX)
+		if (selectedPresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
+			selectedPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+
+		// Choose extent
+		VkExtent2D selectedExtent{};
+		if (renderer.swapchainDetails.capabilities.currentExtent.width != UINT32_MAX)
 		{
-			free(pQueueFamiliesArray);
-			continue;
+			selectedExtent = renderer.swapchainDetails.capabilities.currentExtent;
+		}
+		else
+		{
+			int width, height;
+			SDL_Vulkan_GetDrawableSize(window.handle, &width, &height);
+			selectedExtent = { (uint32_t)width, (uint32_t)height };
+			SDL_clamp(selectedExtent.width, renderer.swapchainDetails.capabilities.minImageExtent.width, renderer.swapchainDetails.capabilities.maxImageExtent.width);
+			SDL_clamp(selectedExtent.height, renderer.swapchainDetails.capabilities.minImageExtent.height, renderer.swapchainDetails.capabilities.maxImageExtent.height);
 		}
 
-		// Get swapchain support ( capabilities, formats, presentModes ) 
-		SwapchainSupportDetails details{};
-		
-		// Swapchain capabilities
-		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(pPhysicalDevicesArray[i], pSelectInfo->surface, &details.capabilities);
+		VkSwapchainCreateInfoKHR swapchainCI{
+			.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+			.surface = renderer.surface,
+			.minImageCount = imageCount,
+			.imageFormat = selectedSurfaceFormat.format,
+			.imageColorSpace = selectedSurfaceFormat.colorSpace,
+			.imageExtent = selectedExtent,
+			.imageArrayLayers = 1,
+			.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+			.preTransform = renderer.swapchainDetails.capabilities.currentTransform,
+			.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+			.presentMode = selectedPresentMode,
+			.oldSwapchain = VK_NULL_HANDLE 
+		};
 
-		// Swapchain formats
-		uint32_t formatsCount{};
-		vkGetPhysicalDeviceSurfaceFormatsKHR(pPhysicalDevicesArray[i], pSelectInfo->surface, &formatsCount, nullptr);
+		bool isExclusive = renderer.graphicsFamily == renderer.presentFamily;
 
-		if (formatsCount == 0)
+		if (isExclusive)
 		{
-			free(pQueueFamiliesArray);
-			continue;
+			swapchainCI.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		}
+		else
+		{
+			uint32_t queueFamilyIndices[] = { renderer.graphicsFamily, renderer.presentFamily };
+			swapchainCI.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+			swapchainCI.queueFamilyIndexCount = 2;
+			swapchainCI.pQueueFamilyIndices = queueFamilyIndices;
 		}
 
-		VkSurfaceFormatKHR* pFormatsArray = (VkSurfaceFormatKHR*)malloc(formatsCount * sizeof(VkSurfaceFormatKHR));
-		assert(pFormatsArray != NULL && "heap allocation failed");
-		vkGetPhysicalDeviceSurfaceFormatsKHR(pPhysicalDevicesArray[i], pSelectInfo->surface, &formatsCount, pFormatsArray);
-		details.formats = pFormatsArray;
+		VK_CHECK(vkCreateSwapchainKHR(renderer.device, &swapchainCI, nullptr, &renderer.swapchain));
 
-		// Swapchain presentModes
-		uint32_t presentModesCount{};
-		vkGetPhysicalDeviceSurfacePresentModesKHR(pPhysicalDevicesArray[i], pSelectInfo->surface, &presentModesCount, nullptr);
+		renderer.surfaceFormat = selectedSurfaceFormat;
+		renderer.surfaceExtent = selectedExtent;
 
-		if (presentModesCount == 0)
+		// Images
+		vkGetSwapchainImagesKHR(renderer.device, renderer.swapchain, &imageCount, nullptr);
+		renderer.swapchainImages.resize(imageCount);
+		vkGetSwapchainImagesKHR(renderer.device, renderer.swapchain, &imageCount, renderer.swapchainImages.data());
+
+		// Image views
+		renderer.swapchainImageViews.resize(imageCount);
+		for (uint32_t i = 0; i < imageCount; ++i)
 		{
-			free(pQueueFamiliesArray);
-			free(pFormatsArray);
-			continue;
+			VkImageViewCreateInfo imageViewCI{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+				.image = renderer.swapchainImages[i],
+				.viewType = VK_IMAGE_VIEW_TYPE_2D,
+				.format = renderer.surfaceFormat.format,
+				.components = {
+					VK_COMPONENT_SWIZZLE_IDENTITY,
+					VK_COMPONENT_SWIZZLE_IDENTITY,
+					VK_COMPONENT_SWIZZLE_IDENTITY,
+					VK_COMPONENT_SWIZZLE_IDENTITY 
+				},
+				.subresourceRange = {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0,
+					.levelCount = 1,
+					.baseArrayLayer = 0,
+					.layerCount = 1
+				}
+			};
+
+			VK_CHECK(vkCreateImageView(renderer.device, &imageViewCI, nullptr, &renderer.swapchainImageViews[i]));
 		}
 
-		VkPresentModeKHR* pPresentModesArray = (VkPresentModeKHR*)malloc(presentModesCount * sizeof(VkPresentModeKHR));
-		assert(pPresentModesArray != NULL && "heap allocation failed");
-		vkGetPhysicalDeviceSurfacePresentModesKHR(pPhysicalDevicesArray[i], pSelectInfo->surface, &presentModesCount, pPresentModesArray);
-		details.presentModes = pPresentModesArray;
+	} // End VkSwapchainKHR and Images, ImageViews
 
-		// Physical Device selected
-		hasPhysicalDeviceSuitable = true;
-		*pPhysicalDevice = pPhysicalDevicesArray[i];
-		*pSwapchainDetails = details;
-
-		// Free
-		free(pQueueFamiliesArray);
-		break;
-	}
-
-	assert(hasPhysicalDeviceSuitable && "No suitable physical device");
-
-	// Free allocations
-	free(pPhysicalDevicesArray);
-}
-
-static void leCreateDevice(const LeDeviceCreateInfo* pCreateInfo, VkDevice* pDevice)
-{
-	bool isExclusive = pCreateInfo->indices.graphicsFamily == pCreateInfo->indices.presentFamily;
-
-	float queuePriority = 1.0f;
-	VkDeviceQueueCreateInfo graphicsQueueCI{};
-	graphicsQueueCI.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	graphicsQueueCI.queueFamilyIndex = pCreateInfo->indices.graphicsFamily;
-	graphicsQueueCI.pQueuePriorities = &queuePriority;
-	graphicsQueueCI.queueCount = 1;
-
-	VkDeviceQueueCreateInfo presentQueueCI{};
-	if (!isExclusive)
+	// Create VkRenderPass
 	{
-		presentQueueCI.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		presentQueueCI.queueFamilyIndex = pCreateInfo->indices.graphicsFamily;
-		presentQueueCI.pQueuePriorities = &queuePriority;
-		presentQueueCI.queueCount = 1;
-	}
+		VkAttachmentDescription colorAttachment{
+			.format = renderer.surfaceFormat.format,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+		};
 
-	VkDeviceQueueCreateInfo queuesCI[2] = { graphicsQueueCI, presentQueueCI };
+		VkAttachmentReference colorAttachmentRef{
+			.attachment = 0,
+			.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+		};
 
-	VkPhysicalDeviceFeatures features{};
+		VkSubpassDescription subpass{
+			.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+			.colorAttachmentCount = 1,
+			.pColorAttachments = &colorAttachmentRef
+		};
 
-	const char* deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+		VkSubpassDependency dependency{
+			.srcSubpass = VK_SUBPASS_EXTERNAL,
+			.dstSubpass = 0,
+			.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			.srcAccessMask = 0,
+			.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+		};
 
-	VkDeviceCreateInfo deviceCI{};
-	deviceCI.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	deviceCI.queueCreateInfoCount = isExclusive ? 1 : 2;
-	deviceCI.pQueueCreateInfos = isExclusive ? &graphicsQueueCI : queuesCI;
-	deviceCI.enabledExtensionCount = 1;
-	deviceCI.ppEnabledExtensionNames = &deviceExtensions;
-	deviceCI.pEnabledFeatures = NULL;
+		VkAttachmentDescription attachments[] = { colorAttachment };
 
-	VK_CHECK(vkCreateDevice(pCreateInfo->physicalDevice, &deviceCI, nullptr, pDevice));
-}
+		VkRenderPassCreateInfo renderPassCI{
+			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+			.attachmentCount = 1,
+			.pAttachments = attachments,
+			.subpassCount = 1,
+			.pSubpasses = &subpass,
+			.dependencyCount = 1,
+			.pDependencies = &dependency
+		};
 
-static void leCreateAllocator(const LeAllocatorCreateInfo* pCreateInfo, VmaAllocator* pAllocator)
-{
-	VmaAllocatorCreateInfo allocatorCI{};
-	allocatorCI.instance = pCreateInfo->instance;
-	allocatorCI.physicalDevice = pCreateInfo->physicalDevice;
-	allocatorCI.device = pCreateInfo->device;
+		VK_CHECK(vkCreateRenderPass(renderer.device, &renderPassCI, nullptr, &renderer.renderPass));
 
-	VK_CHECK(vmaCreateAllocator(&allocatorCI, pAllocator));
-}
+	} // End VkRenderPass
 
-static void leCreateSwapchain(const LeWindow* pWindow, const LeSwapchainCreateInfo* pCreateInfo, VkSwapchainKHR* pSwapchain, VkExtent2D* pExtent, VkSurfaceFormatKHR* pFormat)
-{
-	uint32_t imageCount = pCreateInfo->device.details.capabilities.minImageCount + 1;
 
-	if (pCreateInfo->device.details.capabilities.maxImageCount > 0 && imageCount > pCreateInfo->device.details.capabilities.maxImageCount)
+	// Create Framebuffers
 	{
-		imageCount = pCreateInfo->device.details.capabilities.maxImageCount;
-	}
+		renderer.framebuffers.resize(renderer.swapchainImageViews.size());
 
-	// Choose swapchain surface format
-	uint32_t formatCount;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(pCreateInfo->device.physicalDevice, pCreateInfo->device.surface, &formatCount, nullptr);
-	VkSurfaceFormatKHR selectedSurfaceFormat{};
-	for (uint32_t i = 0; i < formatCount; ++i)
-	{
-		if (pCreateInfo->device.details.formats[i].format == VK_FORMAT_B8G8R8A8_SRGB && pCreateInfo->device.details.formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+#ifdef DEBUG
+		printf("\nFramebuffers:\n");
+		printf("- Count: %d\n", (int)renderer.framebuffers.size());
+#endif 
+
+
+		for (uint32_t i = 0; i < renderer.swapchainImageViews.size(); ++i)
 		{
-			selectedSurfaceFormat = pCreateInfo->device.details.formats[i];
-			break;
+			VkImageView attachments[] = { renderer.swapchainImageViews[i]};
+
+			VkFramebufferCreateInfo framebufferCI{
+				.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+				.renderPass = renderer.renderPass,
+				.attachmentCount = 1,
+				.pAttachments = attachments,
+				.width = renderer.surfaceExtent.width,
+				.height = renderer.surfaceExtent.height,
+				.layers = 1
+			};
+
+			VK_CHECK(vkCreateFramebuffer(renderer.device, &framebufferCI, nullptr, &renderer.framebuffers[i]));
 		}
-	}
 
-	if (selectedSurfaceFormat.format == VK_FORMAT_UNDEFINED)
-	{
-		selectedSurfaceFormat = pCreateInfo->device.details.formats[0];
-	}
+	} // End Framebuffers
 
-	// Choose swapchain present mode
-	uint32_t presentModeCount;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(pCreateInfo->device.physicalDevice, pCreateInfo->device.surface, &presentModeCount, nullptr);
-	VkPresentModeKHR selectedPresentMode{};
-	for (uint32_t i = 0; i < presentModeCount; ++i)
+
+	// Create VkCommandPool and VkCommandBuffers
 	{
-		if (pCreateInfo->device.details.presentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+		VkCommandPoolCreateInfo commandPoolCI{
+			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+			.queueFamilyIndex = renderer.graphicsFamily,
+		};
+
+		VK_CHECK(vkCreateCommandPool(renderer.device, &commandPoolCI, nullptr, &renderer.commandPool));
+
+		renderer.commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+
+		VkCommandBufferAllocateInfo commandBufferCI{
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			.commandPool = renderer.commandPool,
+			.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			.commandBufferCount = (uint32_t)renderer.commandBuffers.size()
+		};
+
+		VK_CHECK(vkAllocateCommandBuffers(renderer.device, &commandBufferCI, renderer.commandBuffers.data()));
+
+#ifdef DEBUG
+		printf("\nCommand Buffers:\n");
+		printf("Count: %d\n", (int)renderer.commandBuffers.size());
+#endif
+	} // End VkCommandPool amd VkCommandBuffers
+
+
+	// Create Sync Objects ( VkSemaphore, VkFence )
+	{
+		renderer.imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		renderer.renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		renderer.inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+#ifdef DEBUG
+		printf("\nSync Objects:\n");
+		printf("- Semaphores\n");
+		printf("\t- ImageAvailableSemaphore: %zd\n", renderer.imageAvailableSemaphores.size());
+		printf("\t- RenderFinishedSemaphores: %zd\n", renderer.renderFinishedSemaphores.size());
+		printf("- Fences\n");
+		printf("\t- InFlightFences: %zd\n", renderer.inFlightFences.size());
+#endif 
+
+
+		VkSemaphoreCreateInfo semaphoreCI{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
+		};
+
+		VkFenceCreateInfo fenceCI{
+			.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+			.flags = VK_FENCE_CREATE_SIGNALED_BIT
+		};
+
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 		{
-			selectedPresentMode = pCreateInfo->device.details.presentModes[i];
-			break;
+			VK_CHECK(vkCreateSemaphore(renderer.device, &semaphoreCI, nullptr, &renderer.imageAvailableSemaphores[i]));
+			VK_CHECK(vkCreateSemaphore(renderer.device, &semaphoreCI, nullptr, &renderer.renderFinishedSemaphores[i]));
+			VK_CHECK(vkCreateFence(renderer.device, &fenceCI, nullptr, &renderer.inFlightFences[i]));
 		}
-	}
-
-	if (selectedPresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
-	{
-		selectedPresentMode = VK_PRESENT_MODE_FIFO_KHR;
-	}
-
-	// Choose swapchain extent
-	VkExtent2D selectedExtent{};
-	if (pCreateInfo->device.details.capabilities.currentExtent.width != UINT32_MAX)
-	{
-		selectedExtent = pCreateInfo->device.details.capabilities.currentExtent;
-	}
-	else
-	{
-		int width, height;
-		SDL_Vulkan_GetDrawableSize(pWindow->handle, &width, &height);
-		selectedExtent = { (uint32_t)width, (uint32_t)height };
-		SDL_clamp(selectedExtent.width, pCreateInfo->device.details.capabilities.minImageExtent.width, pCreateInfo->device.details.capabilities.maxImageExtent.width);
-		SDL_clamp(selectedExtent.height, pCreateInfo->device.details.capabilities.minImageExtent.height, pCreateInfo->device.details.capabilities.maxImageExtent.height);
-	}
-
-	// Create swapchain
-	VkSwapchainCreateInfoKHR swapchainCI{};
-	swapchainCI.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	swapchainCI.surface = pCreateInfo->device.surface;
-	swapchainCI.minImageCount = imageCount;
-	swapchainCI.imageFormat = selectedSurfaceFormat.format;
-	swapchainCI.imageColorSpace = selectedSurfaceFormat.colorSpace;
-	swapchainCI.imageExtent = selectedExtent;
-	swapchainCI.imageArrayLayers = 1;
-	swapchainCI.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-	swapchainCI.preTransform = pCreateInfo->device.details.capabilities.currentTransform;
-	swapchainCI.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	swapchainCI.presentMode = selectedPresentMode;
-	swapchainCI.oldSwapchain = VK_NULL_HANDLE;
-
-	bool isExclusive = pCreateInfo->device.queueIndices.graphicsFamily == pCreateInfo->device.queueIndices.presentFamily;
-
-	if (isExclusive)
-	{
-		swapchainCI.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	}
-	else
-	{
-		uint32_t queueFamilyIndices[] = { pCreateInfo->device.queueIndices.graphicsFamily, pCreateInfo->device.queueIndices.presentFamily };
-		swapchainCI.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-		swapchainCI.queueFamilyIndexCount = 2;
-		swapchainCI.pQueueFamilyIndices = queueFamilyIndices;
-	}
-
-	VK_CHECK(vkCreateSwapchainKHR(pCreateInfo->device.handle, &swapchainCI, nullptr, pSwapchain));
-
-	*pFormat = selectedSurfaceFormat;
-	*pExtent = selectedExtent;
+	} // End Sync Objects
 }
 
-static void leCreateSwapchainImages(const LeSwapchainImagesCreateInfo* pCreateInfo, VkImage** ppImages, uint32_t* pImageCount)
+void leRendererDestroy(LeRenderer& renderer)
 {
-	vkGetSwapchainImagesKHR(pCreateInfo->device, pCreateInfo->swapchain, pImageCount, nullptr);
-	*ppImages = (VkImage*)malloc(*pImageCount * sizeof(VkImage));
-	assert(*ppImages != NULL && "heap allocation failed");
-	vkGetSwapchainImagesKHR(pCreateInfo->device, pCreateInfo->swapchain, pImageCount, *ppImages);
-}
-
-static void leCreateSwapchainImageViews(const LeSwapchainImageViewCreateInfo* pCreateInfo, VkImageView** ppImageViews)
-{
-	*ppImageViews = (VkImageView*)malloc(pCreateInfo->imageCount * sizeof(VkImageView));
-	assert(*ppImageViews != NULL && "heap allocation failed");
-
-	for (uint32_t i = 0; i < pCreateInfo->imageCount; ++i)
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
-		VkImageViewCreateInfo imageViewCI{};
-		imageViewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		imageViewCI.image = pCreateInfo->pImages[i];
-		imageViewCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		imageViewCI.format = pCreateInfo->format.format;
-		imageViewCI.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-		imageViewCI.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-		imageViewCI.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-		imageViewCI.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-		imageViewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		imageViewCI.subresourceRange.baseMipLevel = 0;
-		imageViewCI.subresourceRange.levelCount = 1;
-		imageViewCI.subresourceRange.baseArrayLayer = 0;
-		imageViewCI.subresourceRange.layerCount = 1;
-
-		VK_CHECK(vkCreateImageView(pCreateInfo->device, &imageViewCI, nullptr, &(*ppImageViews)[i]));
-	}
-}
-
-static void leCreateRenderPass(const LeRenderPassCreateInfo* pCreateInfo, VkRenderPass* pRenderPass)
-{
-
-	VkAttachmentDescription colorAttachment = {};
-	colorAttachment.format = pCreateInfo->colorFormat;
-	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-	VkAttachmentReference colorAttachmentRef{};
-	colorAttachmentRef.attachment = 0;
-	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-	VkSubpassDescription subpass{};
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass.colorAttachmentCount = 1;
-	subpass.pColorAttachments = &colorAttachmentRef;
-
-	VkSubpassDependency dependency{};
-	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-	dependency.srcAccessMask = 0;
-	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	dependency.dstSubpass = 0;
-	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-	VkAttachmentDescription attachments[] = { colorAttachment };
-
-	VkRenderPassCreateInfo renderPassCI{};
-	renderPassCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	renderPassCI.attachmentCount = 1;
-	renderPassCI.pAttachments = attachments;
-	renderPassCI.subpassCount = 1;
-	renderPassCI.pSubpasses = &subpass;
-	renderPassCI.dependencyCount = 1;
-	renderPassCI.pDependencies = &dependency;
-
-	VK_CHECK(vkCreateRenderPass(pCreateInfo->device, &renderPassCI, nullptr, pRenderPass));
-}
-
-static void leCreateFramebuffers(const LeFramebufferCreateInfo* pCreateInfo, VkFramebuffer** ppFramebuffers, uint32_t* pFramebuferCount)
-{
-	*ppFramebuffers = (VkFramebuffer*)malloc(pCreateInfo->framebufferCount * sizeof(VkFramebuffer));
-	assert(*ppFramebuffers != NULL && "heap allocation failed");
-
-	for (uint32_t i = 0; i < pCreateInfo->framebufferCount; ++i)
-	{
-		VkImageView attachments[] = { pCreateInfo->pSwapchainImageViews[i] };
-
-		VkFramebufferCreateInfo framebufferCI{};
-		framebufferCI.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		framebufferCI.renderPass = pCreateInfo->renderPass;
-		framebufferCI.attachmentCount = 1;
-		framebufferCI.pAttachments = attachments;
-		framebufferCI.width = pCreateInfo->swapchainExtent.width;
-		framebufferCI.height = pCreateInfo->swapchainExtent.height;
-		framebufferCI.layers = 1;
-	
-		VK_CHECK(vkCreateFramebuffer(pCreateInfo->device, &framebufferCI, nullptr, &(*ppFramebuffers)[i]));
+		vkDestroySemaphore(renderer.device, renderer.imageAvailableSemaphores[i], nullptr);
+		vkDestroySemaphore(renderer.device, renderer.renderFinishedSemaphores[i], nullptr);
+		vkDestroyFence(renderer.device, renderer.inFlightFences[i], nullptr);
 	}
 
-	*pFramebuferCount = pCreateInfo->framebufferCount;
-}
+	vkDestroyCommandPool(renderer.device, renderer.commandPool, nullptr);
 
-static void leCreateCommandPool(const LeCommandPoolCreateInfo* pCreateInfo, VkCommandPool* pCommandPool)
-{
-	VkCommandPoolCreateInfo commandPoolCI{};
-	commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	commandPoolCI.queueFamilyIndex = pCreateInfo->queueIndex;
-	commandPoolCI.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-
-	VK_CHECK(vkCreateCommandPool(pCreateInfo->device, &commandPoolCI, nullptr, pCommandPool));
-}
-
-static void leCreateCommandBuffers(const LeCommandBufferCreateInfo* pCreateInfo, VkCommandBuffer** ppCommandBuffers, uint32_t* pCommandBufferCount)
-{
-	*ppCommandBuffers = (VkCommandBuffer*)malloc(pCreateInfo->count * sizeof(VkCommandBuffer));
-	assert(*ppCommandBuffers != NULL && "heap allocation failed");
-
-
-	VkCommandBufferAllocateInfo commandBufferCI{};
-	commandBufferCI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	commandBufferCI.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	commandBufferCI.commandPool = pCreateInfo->commandPool;
-	commandBufferCI.commandBufferCount = pCreateInfo->count;
-
-	VK_CHECK(vkAllocateCommandBuffers(pCreateInfo->device, &commandBufferCI, &(*ppCommandBuffers)[0]));
-
-	*pCommandBufferCount = pCreateInfo->count;
-
-}
-
-static void leCreateSyncObjects(VkDevice device, VkFence** ppInFlightFences, VkFence** ppImageInFlightFences, VkSemaphore** ppImageAvailableSemaphores, VkSemaphore** ppRenderFinishedSemaphores, uint32_t* pSyncObjectCount)
-{
-	*ppInFlightFences = (VkFence*)malloc(MAX_FRAMES_IN_FLIGHT * sizeof(VkFence));
-	*ppImageInFlightFences = (VkFence*)malloc(MAX_FRAMES_IN_FLIGHT * sizeof(VkFence));
-	*ppImageAvailableSemaphores = (VkSemaphore*)malloc(MAX_FRAMES_IN_FLIGHT * sizeof(VkSemaphore));
-	*ppRenderFinishedSemaphores = (VkSemaphore*)malloc(MAX_FRAMES_IN_FLIGHT * sizeof(VkSemaphore));
-
-	assert(*ppInFlightFences != NULL && "heap allocation failed");
-	assert(*ppImageInFlightFences != NULL && "heap allocation failed");
-	assert(*ppImageAvailableSemaphores != NULL && "heap allocation failed");
-	assert(*ppRenderFinishedSemaphores != NULL && "heap allocation failed");
-
-	VkFenceCreateInfo fenceCI{};
-	fenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-	VkSemaphoreCreateInfo semaphoreCI{};
-	semaphoreCI.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-	for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	for (const auto framebuffer : renderer.framebuffers)
 	{
-		VK_CHECK(vkCreateSemaphore(device, &semaphoreCI, nullptr, &(*ppImageAvailableSemaphores)[i]));
-		VK_CHECK(vkCreateSemaphore(device, &semaphoreCI, nullptr, &(*ppRenderFinishedSemaphores)[i]));
-		VK_CHECK(vkCreateFence(device, &fenceCI, nullptr, &(*ppInFlightFences)[i]));
+		vkDestroyFramebuffer(renderer.device, framebuffer, nullptr);
 	}
 
-	*pSyncObjectCount = MAX_FRAMES_IN_FLIGHT;
+	vkDestroyRenderPass(renderer.device, renderer.renderPass, nullptr);
+
+	for (const auto imageView : renderer.swapchainImageViews)
+	{
+		vkDestroyImageView(renderer.device, imageView, nullptr);
+	}
+
+	vkDestroySwapchainKHR(renderer.device, renderer.swapchain, nullptr);
+	vmaDestroyAllocator(renderer.allocator);
+	vkDestroyDevice(renderer.device, nullptr);
+	vkDestroySurfaceKHR(renderer.instance, renderer.surface, nullptr);
+	vkDestroyInstance(renderer.instance, nullptr);
 }
-
-
-
-
-
