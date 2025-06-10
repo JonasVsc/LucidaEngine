@@ -8,7 +8,7 @@
 
 #define ENABLE_VALIDATION_LAYERS true
 
-constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+constexpr int MAX_FRAMES_IN_FLIGHT = 3;
 
 #define VK_CHECK(x)																										\
 	do																													\
@@ -36,6 +36,8 @@ struct LeRenderer {
 	VkPhysicalDevice physicalDevice;
 	uint32_t presentFamily;
 	uint32_t graphicsFamily;
+	VkQueue graphicsQueue;
+	VkQueue presentQueue;
 	SwapchainSupportDetails swapchainDetails;
 	VkDevice device;
 	VmaAllocator allocator;

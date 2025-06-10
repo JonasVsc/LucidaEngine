@@ -49,7 +49,7 @@ void leRendererCreate(LeWindow& window, LeRenderer& renderer)
 
 		VkApplicationInfo appInfo{
 			.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-			.apiVersion = VK_MAKE_API_VERSION(0, 1, 4, 0)
+			.apiVersion = VK_MAKE_API_VERSION(0, 1, 2, 0)
 		};
 
 		VkInstanceCreateInfo instanceCI{
@@ -193,6 +193,9 @@ void leRendererCreate(LeWindow& window, LeRenderer& renderer)
 		};
 
 		VK_CHECK(vkCreateDevice(renderer.physicalDevice, &deviceCI, nullptr, &renderer.device));
+
+		vkGetDeviceQueue(renderer.device, renderer.graphicsFamily, 0, &renderer.graphicsQueue);
+		vkGetDeviceQueue(renderer.device, renderer.presentFamily, 0, &renderer.presentQueue);
 
 	} // End VkDevice
 	 
@@ -360,10 +363,10 @@ void leRendererCreate(LeWindow& window, LeRenderer& renderer)
 		VkSubpassDependency dependency{
 			.srcSubpass = VK_SUBPASS_EXTERNAL,
 			.dstSubpass = 0,
-			.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-			.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 			.srcAccessMask = 0,
-			.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+			.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
 		};
 
 		VkAttachmentDescription attachments[] = { colorAttachment };
@@ -477,6 +480,8 @@ void leRendererCreate(LeWindow& window, LeRenderer& renderer)
 
 void leRendererDestroy(LeRenderer& renderer)
 {
+	vkDeviceWaitIdle(renderer.device);
+
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
 		vkDestroySemaphore(renderer.device, renderer.imageAvailableSemaphores[i], nullptr);
