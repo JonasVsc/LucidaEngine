@@ -75,7 +75,7 @@ static void leCreateRenderPass(const LeRenderPassCreateInfo* pCreateInfo, VkRend
 static void leCreateFramebuffers(const LeFramebufferCreateInfo* pCreateInfo, VkFramebuffer** ppFramebuffers, uint32_t* pFramebuferCount);
 static void leCreateCommandPool(const LeCommandPoolCreateInfo* pCreateInfo, VkCommandPool* pCommandPool);
 static void leCreateCommandBuffers(const LeCommandBufferCreateInfo* pCreateInfo, VkCommandBuffer** ppCommandBuffer, uint32_t* pCommandBufferCount);
-
+static void leCreateSyncObjects(VkDevice device, VkFence** ppInFlightFences, VkFence** ppImageInFlightFences, VkSemaphore** ppImageAvailableSemaphores, VkSemaphore** ppRenderFinishedSemaphores, uint32_t* pSyncObjectCount);
 
 LeResult leRendererInit(const LeRendererCreateInfo* pCreateInfo, LeRenderer* pRenderer)
 {
@@ -152,6 +152,8 @@ LeResult leRendererInit(const LeRendererCreateInfo* pCreateInfo, LeRenderer* pRe
 
 	leCreateCommandBuffers(&commandBufferCI, &pRenderer->commandBuffers, &pRenderer->commandBufferCount);
 
+	leCreateSyncObjects(pRenderer->device.handle, &pRenderer->pInFlightFences, &pRenderer->pImageInFlightFences, &pRenderer->pImageAvailableSemaphores, &pRenderer->pRenderFinishedSemaphores, &pRenderer->syncObjectsCount);
+
 	return LE_SUCCESS;
 }
 
@@ -164,6 +166,18 @@ void leRendererDestroy(LeRenderer* pRenderer)
 
 	free(pRenderer->device.details.formats);
 	free(pRenderer->device.details.presentModes);
+
+	for (uint32_t i = 0; i < pRenderer->syncObjectsCount; ++i)
+	{
+		vkDestroyFence(pRenderer->device.handle, pRenderer->pInFlightFences[i], nullptr);
+		vkDestroySemaphore(pRenderer->device.handle, pRenderer->pImageAvailableSemaphores[i], nullptr);
+		vkDestroySemaphore(pRenderer->device.handle, pRenderer->pRenderFinishedSemaphores[i], nullptr);
+	}
+
+	free(pRenderer->pImageAvailableSemaphores);
+	free(pRenderer->pRenderFinishedSemaphores);
+	free(pRenderer->pImageInFlightFences);
+	free(pRenderer->pInFlightFences);
 
 	vkDestroyCommandPool(pRenderer->device.handle, pRenderer->commandPool, nullptr);
 
@@ -645,6 +659,36 @@ static void leCreateCommandBuffers(const LeCommandBufferCreateInfo* pCreateInfo,
 	*pCommandBufferCount = pCreateInfo->count;
 
 }
+
+static void leCreateSyncObjects(VkDevice device, VkFence** ppInFlightFences, VkFence** ppImageInFlightFences, VkSemaphore** ppImageAvailableSemaphores, VkSemaphore** ppRenderFinishedSemaphores, uint32_t* pSyncObjectCount)
+{
+	*ppInFlightFences = (VkFence*)malloc(MAX_FRAMES_IN_FLIGHT * sizeof(VkFence));
+	*ppImageInFlightFences = (VkFence*)malloc(MAX_FRAMES_IN_FLIGHT * sizeof(VkFence));
+	*ppImageAvailableSemaphores = (VkSemaphore*)malloc(MAX_FRAMES_IN_FLIGHT * sizeof(VkSemaphore));
+	*ppRenderFinishedSemaphores = (VkSemaphore*)malloc(MAX_FRAMES_IN_FLIGHT * sizeof(VkSemaphore));
+
+	assert(*ppInFlightFences != NULL && "heap allocation failed");
+	assert(*ppImageInFlightFences != NULL && "heap allocation failed");
+	assert(*ppImageAvailableSemaphores != NULL && "heap allocation failed");
+	assert(*ppRenderFinishedSemaphores != NULL && "heap allocation failed");
+
+	VkFenceCreateInfo fenceCI{};
+	fenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	VkSemaphoreCreateInfo semaphoreCI{};
+	semaphoreCI.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	{
+		VK_CHECK(vkCreateSemaphore(device, &semaphoreCI, nullptr, &(*ppImageAvailableSemaphores)[i]));
+		VK_CHECK(vkCreateSemaphore(device, &semaphoreCI, nullptr, &(*ppRenderFinishedSemaphores)[i]));
+		VK_CHECK(vkCreateFence(device, &fenceCI, nullptr, &(*ppInFlightFences)[i]));
+	}
+
+	*pSyncObjectCount = MAX_FRAMES_IN_FLIGHT;
+}
+
 
 
 

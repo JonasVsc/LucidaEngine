@@ -7,6 +7,8 @@
 
 #define VALIDATION_LAYERS true
 
+constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+
 #define VK_CHECK(x)																										\
 	do																													\
 	{																													\
@@ -70,6 +72,13 @@ struct LeRenderer {
 	VkCommandPool commandPool;
 	VkCommandBuffer* commandBuffers;
 	uint32_t commandBufferCount;
+
+	// Sync Objects
+	VkFence* pInFlightFences;
+	VkFence* pImageInFlightFences;
+	VkSemaphore* pImageAvailableSemaphores;
+	VkSemaphore* pRenderFinishedSemaphores;
+	uint32_t syncObjectsCount;
 };
 
 LeResult leRendererInit(const LeRendererCreateInfo* pCreateInfo, LeRenderer* pRenderer);
